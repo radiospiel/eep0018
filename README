@@ -1,0 +1,32 @@
+This module strives to prepare an EEP0018 implemenation. It implements most of the 
+functionality described there, with some additional features.  
+
+YAJL
+====
+
+The parsing engine that drives behind that module is YAJL, see http://lloydforge.org/projects/yajl/.
+The source tree contains a copy of that library, currently at version 0.4.0.
+ 
+Differences to EEP 18
+=======================
+
+EEP 18's json_to_term function defines parsing of JSON objects. As CouchDB
+needs a JSON parser that is able to parse JSON values this implementation adds
+this functionality.
+
+Implemenation Status
+====================
+
+The current development is done on OS/X 10.5. Other OSes might need a tuned
+Makefile.
+
+Critical Discussion
+===================
+
+For a critical discussion of JSON <-> Erlang interaction see here:
+
+	http://fullof.bs/prototype-eep-18-considered-harmful-the-problems-with-erlang-to-json-term-translation#more-402
+	
+	and
+	
+	http://sc.tri-bit.com/outgoing/scjson%20parser%20halp.html

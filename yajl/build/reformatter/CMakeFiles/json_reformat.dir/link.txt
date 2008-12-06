@@ -1,0 +1,1 @@
+/usr/bin/gcc  -Wall -fPIC -ansi -DDEBUG -g -Wl,-search_paths_first -headerpad_max_install_names -fPIC CMakeFiles/json_reformat.dir/json_reformat.o  -o json_reformat  -L/Users/eno/projects/json/yajl-c-read-only/build/reformatter/../yajl-0.4.0/lib ../yajl-0.4.0/lib/libyajl_s.a 

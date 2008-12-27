@@ -1,2 +1,0 @@
-/usr/bin/ar cr ../yajl-0.4.0/lib/libyajl_s.a  CMakeFiles/yajl_s.dir/yajl.o CMakeFiles/yajl_s.dir/yajl_lex.o CMakeFiles/yajl_s.dir/yajl_parser.o CMakeFiles/yajl_s.dir/yajl_buf.o CMakeFiles/yajl_s.dir/yajl_encode.o CMakeFiles/yajl_s.dir/yajl_gen.o 
-/usr/bin/ranlib ../yajl-0.4.0/lib/libyajl_s.a 

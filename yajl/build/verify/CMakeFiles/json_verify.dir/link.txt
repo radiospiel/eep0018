@@ -1,1 +1,0 @@
-/usr/bin/gcc  -Wall -fPIC -ansi -DDEBUG -g -Wl,-search_paths_first -headerpad_max_install_names -fPIC CMakeFiles/json_verify.dir/json_verify.o  -o json_verify  -L/Users/eno/projects/json/yajl-c-read-only/build/verify/../yajl-0.4.0/lib ../yajl-0.4.0/lib/libyajl_s.a 

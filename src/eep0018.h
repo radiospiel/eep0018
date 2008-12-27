@@ -11,11 +11,12 @@
 #define EEP0018_ATOM     10
 #define EEP0018_NUMBER   11
 #define EEP0018_STRING   12
+#define EEP0018_KEY      13
 
 /* complex types */
 
-#define EEP0018_MAP      13
-#define EEP0018_ARRAY    14
-#define EEP0018_END      15
+#define EEP0018_MAP      14
+#define EEP0018_ARRAY    15
+#define EEP0018_END      16
 
 #endif

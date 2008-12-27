@@ -1,5 +1,8 @@
 /* eep0018.c */
 
+#include "erl_interface.h"
+#include "ei.h"
+
 #include "eep0018.h"
 
 #include <stdlib.h>
@@ -72,7 +75,7 @@ static int erl_json_end_map(void* ctx) {
 }
 
 static int erl_json_map_key(void* ctx, const unsigned char * key, unsigned int stringLen) {
-  return send_data(ctx, EEP0018_STRING, (const char*) key, stringLen);
+  return send_data(ctx, EEP0018_KEY, (const char*) key, stringLen);
 }
 
 static int erl_json_start_array(void* ctx) {
@@ -117,7 +120,7 @@ static void json_parse(ErlDrvPort port, const unsigned char* s, int len) {
   } 
   else /* result is ok: send encoded data */
   {
-    // fwrite(buf, 1, len, stdout);
+    // flush_output(port);
   }  
 }
 
@@ -143,6 +146,7 @@ static void eep0018_drv_on_input(ErlDrvData session, char *buf, int len)
   case EEP0018_JSON_PARSE:
     json_parse(port, (unsigned char*) buf+1, len-1);
     break;
+
   default:
     flog(stderr, "Unknown input", 0, buf, len);
   }

@@ -42,6 +42,7 @@ static const char* log_string(unsigned char value) {
     test(ATOM);
     test(NUMBER);
     test(STRING);
+    test(KEY);
     test(MAP);
     test(ARRAY);
     test(END);

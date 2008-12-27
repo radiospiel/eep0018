@@ -7,13 +7,13 @@
 %% constants (see eep0018.h)
 
 -define(JSON_PARSE,       1).
-
 -define(ATOM,             10).
 -define(NUMBER,           11).
 -define(STRING,           12).
--define(MAP,              13).
--define(ARRAY,            14).
--define(END,              15).
+-define(KEY,              13).
+-define(MAP,              14).
+-define(ARRAY,            15).
+-define(END,              16).
 
 %% start/stop port
 
@@ -47,20 +47,15 @@ l(M, X) ->
 
 %% receive values from the Sax driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-receive_token() ->
-  receive
-    { _, { _, [ ?MAP ] } }    -> map;
-    { _, { _, [ ?ARRAY ] } }  -> array;
-    { _, { _, [ ?END ] } }    -> 'end';
-    { _, { _, [ ?ATOM | DATA ] } }   -> {atom, DATA};
-    { _, { _, [ ?NUMBER | DATA ] } } -> {number, DATA};
-    { _, { _, [ ?STRING | DATA ] } } -> {string, DATA};
-
-    UNKNOWN                   -> io:format("UNKNOWN ~p ~n", [UNKNOWN]), UNKNOWN
-  end.
-
-list_to_atom(O, S) ->
-  O,
+%%
+%% Options are as follows
+%%
+%% {float,true}
+%% {duplicate_labels,true/false/raise} % raise badarg
+%% {label,binary|atom|existing_atom}
+%% {strict_order,true/false}
+%%
+list_to_key(S) ->
   try list_to_atom(S) of
     A -> A
   catch
@@ -77,29 +72,27 @@ list_to_number(S) ->
 receive_map(O, In) -> 
   case receive_value(O) of
     'end' -> In;
-    Key   -> 
-      Value=receive_value(O),
-      receive_map(O, [ {Key, Value} | In ])
+    Key   -> receive_map(O, [ {Key, receive_value(O)} | In ])
   end.
 
 receive_array(O, In) -> 
   case receive_value(O) of
     'end' -> lists:reverse(In);
-    T     -> 
-      receive_array(O, [ T | In ])
+    T     -> receive_array(O, [ T | In ])
   end.
 
 receive_value(O) ->
-  case receive_token() of 
-    % new-style parameter passing
-    {atom, DATA}    -> list_to_atom(O, DATA);
-    {number, DATA}  -> list_to_number(DATA);
-    {string, DATA}  -> DATA;
-    
-    % compound values are transferred item by item
-    map     -> receive_map(O, []);
-    array   -> receive_array(O, []);
-    'end'   -> 'end'
+  receive
+    { _, { _, [ ?MAP ] } }    -> receive_map(O, []);
+    { _, { _, [ ?ARRAY ] } }  -> receive_array(O, []);
+    { _, { _, [ ?END ] } }    -> 'end';
+
+    { _, { _, [ ?ATOM | DATA ] } }   -> list_to_atom(DATA);
+    { _, { _, [ ?NUMBER | DATA ] } } -> list_to_number(DATA);
+    { _, { _, [ ?STRING | DATA ] } } -> list_to_binary(DATA);
+    { _, { _, [ ?KEY | DATA ] } }    -> list_to_key(DATA);
+
+    UNKNOWN                   -> io:format("UNKNOWN ~p ~n", [UNKNOWN]), UNKNOWN
   end.
   
 loop(Port) ->

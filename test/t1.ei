@@ -3,7 +3,7 @@ eep0018:start().
 eep0018:parse("[ \"abc\" ]").
 eep0018:parse("[ \"abc\", \"end\" ]").
 
-%eep0018:parse_file("../test/test.json"), nil.
+%eep0018:parse_file("../test/test.json").
 %eep0018:parse_file("../test/test-med.json"), nil.
 %eep0018:parse_file("../test/test-big.json"), nil.
 

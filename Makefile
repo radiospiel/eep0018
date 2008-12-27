@@ -26,7 +26,12 @@ EI_LIBS=-L$(EIROOT)/lib -lerl_interface -lei
 
 GCCFLAGS=-fPIC -shared -bundle -flat_namespace -undefined suppress -fno-common -Wall
 
-CFLAGS=$(GCCFLAGS) -I include $(ERLANG_INCLUDES) $(EI_INCLUDES)
+# enable release mode when activated.
+RELEASE_FLAGS=-O3 -DNDEBUG
+
+CFLAGS=$(GCCFLAGS) -I include $(ERLANG_INCLUDES) $(EI_INCLUDES) $(RELEASE_FLAGS)
+
+
 LFLAGS=$(GCCFLAGS) $(ERLANG_LIBS) $(EI_LIBS)
 
 ERLCFLAGS=
@@ -36,15 +41,15 @@ ERLCFLAGS=
 VPATH=src:$(YAJLROOT)/src
 
 YAJL_OBJECTS=yajl.o yajl_encode.o yajl_lex.o yajl_buf.o yajl_gen.o yajl_parser.o
-EEP_OBJECTS=json_to_term.o eep0018.o
-# EEP_OBJECTS=eep0018.o
+# EEP_OBJECTS=json_to_term.o term_to_json.o eep0018.o
+EEP_OBJECTS=eep0018.o log.o
 
 PATHS=bin include include/yajl
 
 OUTDIR=bin
 
 DRIVER=$(OUTDIR)/eep0018_drv.so
-BEAM=$(OUTDIR)/eep0018.beam
+BEAM=$(OUTDIR)/eep0018.beam $(OUTDIR)/rabbitmq.beam $(OUTDIR)/benchmark.beam
 
 # -- rules --------------------------------------------------------------------
 
@@ -67,7 +72,18 @@ beam: $(BEAM)
 $(OUTDIR)/eep0018.beam: eep0018.erl
 	$(OTPROOT)/bin/erlc -o $(OUTDIR) $^ $(ERLCFLAGS)
 
+$(OUTDIR)/rabbitmq.beam: rabbitmq.erl
+	$(OTPROOT)/bin/erlc -o $(OUTDIR) $^ $(ERLCFLAGS)
+
+$(OUTDIR)/benchmark.beam: benchmark.erl
+	$(OTPROOT)/bin/erlc -o $(OUTDIR) $^ $(ERLCFLAGS)
+
 driver: $(DRIVER)
 
 $(OUTDIR)/eep0018_drv.so: $(YAJL_OBJECTS) $(EEP_OBJECTS)
 	gcc -o $@ $^ $(LFLAGS)
+
+# -- dependencies -------------------------------------------------------------
+
+eep0018.o: log.h eep0018.h Makefile
+log.o: log.h eep0018.h Makefile

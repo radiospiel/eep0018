@@ -1,66 +1,169 @@
 /* eep0018.c */
 
+#include "eep0018.h"
+
+#include <stdlib.h>
+#include <string.h>
+
 #include <stdio.h>
+
+#include <unistd.h>
+#include <assert.h>
 #include <erl_driver.h>
 
-int twice(int x){
-  return 2*x;
+#include "log.h"    
+
+/* the json parser part */
+
+#include <yajl/yajl_parse.h>
+#include <yajl/yajl_gen.h>
+
+static inline ErlDrvPort CtxToPort(void* ctx) {
+  return (ErlDrvPort)ctx;
 }
 
-int sum(int x, int y){
-  return x+y;
+static inline void output(void* ctx, const char* data, int len) {
+  driver_output(CtxToPort(ctx), (char*)data, len);
 }
 
-typedef struct {
-    ErlDrvPort port;
-} eep0018_data;
+static inline void output2(void* ctx, const char* data, int len, const char* data2, int len2) {
+  driver_output2(CtxToPort(ctx), (char*)data, len, (char*)data2, len2);
+}
 
-static ErlDrvData eep0018_drv_start(ErlDrvPort port, char *buff)
+static inline int send_data(void* ctx, char type, const char* data, unsigned int len)
+{ 
+  flog(stderr, "->>>", type, data, len);
+
+  assert(!data || len);
+
+  if(!data)
+    output(ctx, &type, 1);
+  else
+    output2(ctx, &type, 1, data, len); 
+  
+  return 1;
+}
+
+static int erl_json_null(void* ctx) {
+  return send_data(ctx, EEP0018_ATOM, "null", 4);
+}
+
+static int erl_json_boolean(void* ctx, int boolVal) {
+  if(boolVal) send_data(ctx, EEP0018_ATOM, "true", 4);
+  else send_data(ctx, EEP0018_ATOM, "false", 5);
+  
+  return 1;
+}
+
+static int erl_json_number(void* ctx, const char * stringVal, unsigned int stringLen) {
+  return send_data(ctx, EEP0018_NUMBER, (const char*) stringVal, stringLen);
+}
+
+static int erl_json_string(void* ctx, const unsigned char * stringVal, unsigned int stringLen) {
+  return send_data(ctx, EEP0018_STRING, (const char*) stringVal, stringLen);
+}
+
+static int erl_json_start_map(void* ctx) {
+  return send_data(ctx, EEP0018_MAP, NULL, 0);
+}
+
+static int erl_json_end_map(void* ctx) {
+  return send_data(ctx, EEP0018_END, NULL, 0);
+}
+
+static int erl_json_map_key(void* ctx, const unsigned char * key, unsigned int stringLen) {
+  return send_data(ctx, EEP0018_STRING, (const char*) key, stringLen);
+}
+
+static int erl_json_start_array(void* ctx) {
+  return send_data(ctx, EEP0018_ARRAY, NULL, 0);
+}
+
+static int erl_json_end_array(void* ctx) {
+  return send_data(ctx, EEP0018_END, NULL, 0);
+}
+
+static yajl_callbacks erl_json_callbacks = {
+  erl_json_null,
+  erl_json_boolean,
+  NULL,
+  NULL,
+  erl_json_number,
+  erl_json_string,
+  erl_json_start_map,
+  erl_json_map_key,
+  erl_json_end_map,
+  erl_json_start_array,
+  erl_json_end_array
+};
+
+#define ALLOW_COMMENTS 1
+#define CHECK_UTF8 1
+
+static void json_parse(ErlDrvPort port, const unsigned char* s, int len) {
+  /* get a parser handle */
+  yajl_parser_config conf = { ALLOW_COMMENTS, CHECK_UTF8 };
+  yajl_handle handle = yajl_alloc(&erl_json_callbacks, &conf, port);
+
+  /* start parser */
+  yajl_status stat = yajl_parse(handle, s, len);
+  
+  /* if result is not ok: we might raise an error?? */
+  if (stat != yajl_status_ok)
+  {
+    unsigned char* msg =  yajl_get_error(handle, 0, s, len); /* non verbose error message */
+    fprintf(stderr, "%s", (const char *) msg);
+    yajl_free_error(msg);
+  } 
+  else /* result is ok: send encoded data */
+  {
+    // fwrite(buf, 1, len, stdout);
+  }  
+}
+
+/*
+ * == OTP driver management ===========================================
+ */
+
+static ErlDrvData eep0018_drv_start(ErlDrvPort port, char *buf)
 {
-    eep0018_data* d = (eep0018_data*)driver_alloc(sizeof(eep0018_data));
-    d->port = port;
-    return (ErlDrvData)d;
+  set_port_control_flags(port, PORT_CONTROL_FLAG_BINARY);
+  return (ErlDrvData)port;
 }
 
 static void eep0018_drv_stop(ErlDrvData handle)
 {
-    driver_free((char*)handle);
 }
 
-static void eep0018_drv_output(ErlDrvData handle, char *buff, int buflen)
+static void eep0018_drv_on_input(ErlDrvData session, char *buf, int len)
 {
-    eep0018_data* d = (eep0018_data*)handle;
-    char fn = buff[0], arg = buff[1], res;
-    if (fn == 1) {
-      res = twice(arg);
-    } else if (fn == 2) {
-      res = sum(buff[1], buff[2]);
-    }
-    else {
-      res = 3;
-    }
-    
-    driver_output(d->port, &res, 1);
+  ErlDrvPort port = (ErlDrvPort) session;
+
+  switch(*buf) {
+  case EEP0018_JSON_PARSE:
+    json_parse(port, (unsigned char*) buf+1, len-1);
+    break;
+  default:
+    flog(stderr, "Unknown input", 0, buf, len);
+  }
 }
 
-ErlDrvEntry eep0018_driver_entry = {
-    NULL,               /* F_PTR init, N/A */
-    eep0018_drv_start,  /* L_PTR start, called when port is opened */
-    eep0018_drv_stop,   /* F_PTR stop, called when port is closed */
-    eep0018_drv_output, /* F_PTR output, called when erlang has sent
-			   data to the port */
-    NULL,               /* F_PTR ready_input, 
-                           called when input descriptor ready to read*/
-    NULL,               /* F_PTR ready_output, 
-                           called when output descriptor ready to write */
-    "eep0018_drv",     /* char *driver_name, the argument to open_port */
-    NULL,               /* F_PTR finish, called when unloaded */
-    NULL,               /* F_PTR control, port_command callback */
-    NULL,               /* F_PTR timeout, reserved */
-    NULL                /* F_PTR outputv, reserved */
+static ErlDrvEntry eep0018_driver_entry = {
+  NULL,               /* F_PTR init, N/A */
+  eep0018_drv_start,  /* L_PTR start, called when port is opened */
+  eep0018_drv_stop,   /* F_PTR stop, called when port is closed */
+  eep0018_drv_on_input,               /* F_PTR output, called when erlang has sent data to the port */
+  NULL,               /* F_PTR ready_input, called when input descriptor ready to read*/
+  NULL,               /* F_PTR ready_output, called when output descriptor ready to write */
+  "eep0018_drv",      /* char *driver_name, the argument to open_port */
+  NULL,               /* F_PTR finish, called when unloaded */
+  NULL,               /* F_PTR control, port_command callback */
+  NULL,               /* F_PTR timeout, reserved */
+  NULL                /* F_PTR outputv, reserved */
 };
 
 DRIVER_INIT(eep0018_drv) /* must match name in driver_entry */
 {
-    return &eep0018_driver_entry;
+  flog(stderr, "driver loaded.\n", 0, 0, 0);
+  return &eep0018_driver_entry;
 }

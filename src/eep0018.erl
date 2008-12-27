@@ -1,28 +1,31 @@
 -module(eep0018).
 
 -export([start/0, stop/0]).
--export([json_to_term/1, json_to_term/2]).
--export([term_to_json/1, term_to_json/2]).
--export([twice/1, sum/2]).                      % TODO: remove test code!
+-export([parse/1, parse/2]).
+-export([parse_file/1, parse_file/2]).
 
-% Public interface
+%% constants (see eep0018.h)
 
-%%% TODO: set default parameters
+-define(JSON_PARSE,       1).
 
-json_to_term(X) -> json_to_term(X, 0).
-term_to_json(X) -> term_to_json(X, 0).
+-define(ATOM,             10).
+-define(NUMBER,           11).
+-define(STRING,           12).
+-define(MAP,              13).
+-define(ARRAY,            14).
+-define(END,              15).
 
-% Implementation
+%% start/stop port
 
 start() ->
   start("eep0018_drv").
-
+ 
 start(SharedLib) ->
   case erl_ddll:load_driver(".", SharedLib) of
-    ok                      -> ok;
+    ok -> ok;
     {error, already_loaded} -> ok;
-    {error, X}              -> exit({error, X});
-    _                       -> exit({error, could_not_load_driver})
+    {error, X} -> exit({error, X});
+    _ -> exit({error, could_not_load_driver})
   end,
   spawn(fun() -> init(SharedLib) end).
 
@@ -34,45 +37,109 @@ init(SharedLib) ->
 stop() ->
   eep0018 ! stop.
 
-% event loop, etc.
+%% logging helpers. 
 
-call_port(Msg) -> 
-  eep0018 ! {call, self(), Msg},
-  receive 
-    {eep0018, Result} -> Result
+l(X) ->
+  io:format("Log: ~p ~n", [ X ]), X.
+
+l(M, X) ->
+  io:format(M ++ ": ~p ~n", [ X ]), X.
+
+%% receive values from the Sax driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+receive_token() ->
+  receive
+    { _, { _, [ ?MAP ] } }    -> map;
+    { _, { _, [ ?ARRAY ] } }  -> array;
+    { _, { _, [ ?END ] } }    -> 'end';
+    { _, { _, [ ?ATOM | DATA ] } }   -> {atom, DATA};
+    { _, { _, [ ?NUMBER | DATA ] } } -> {number, DATA};
+    { _, { _, [ ?STRING | DATA ] } } -> {string, DATA};
+
+    UNKNOWN                   -> io:format("UNKNOWN ~p ~n", [UNKNOWN]), UNKNOWN
   end.
 
+list_to_atom(O, S) ->
+  O,
+  try list_to_atom(S) of
+    A -> A
+  catch
+    _:_ -> S
+  end.
+
+list_to_number(S) -> 
+  try list_to_integer(S) of
+    I -> I
+  catch
+    _:_ -> list_to_float(S)
+  end.
+
+receive_map(O, In) -> 
+  case receive_value(O) of
+    'end' -> In;
+    Key   -> 
+      Value=receive_value(O),
+      receive_map(O, [ {Key, Value} | In ])
+  end.
+
+receive_array(O, In) -> 
+  case receive_value(O) of
+    'end' -> lists:reverse(In);
+    T     -> 
+      receive_array(O, [ T | In ])
+  end.
+
+receive_value(O) ->
+  case receive_token() of 
+    % new-style parameter passing
+    {atom, DATA}    -> list_to_atom(O, DATA);
+    {number, DATA}  -> list_to_number(DATA);
+    {string, DATA}  -> DATA;
+    
+    % compound values are transferred item by item
+    map     -> receive_map(O, []);
+    array   -> receive_array(O, []);
+    'end'   -> 'end'
+  end.
+  
 loop(Port) ->
   receive
-    {call, Caller, Msg} ->
-      % io:format("~p ~n", [ "pre" ]),
-      % io:format("~p ~n", [ encode(Msg) ]),		
-      Port ! {self(), {command, encode(Msg)}},
-      % io:format("~p ~n", [ "post" ]),
-      receive
-        {Port, {data, Data}} -> Caller ! {eep0018, decode(Data)}
-      end,
+    {parse, Caller, X, O} ->
+      Port ! {self(), {command, [ ?JSON_PARSE | X ]}},
+      Result = receive_value(O),
+      Caller ! {result, Result},
       loop(Port);
+
     stop ->
       Port ! {self(), close},
       receive
         {Port, closed} -> exit(normal)
       end;
+
     {'EXIT', Port, Reason} ->
-      io:format("~p ~n", [Reason]),
-      exit(port_terminated)
+      io:format("exit ~p ~n", [Reason]),
+      exit(port_terminated);
+      
+    X ->
+      io:format("Unknown input! ~p ~n", [X]),
+      loop(Port)
   end.
 
-% 
+%% control loop for driver
 
-twice(X) -> call_port({twice, X}).
-sum(X,Y) -> call_port({sum, X, Y}).
-json_to_term(X,Y) -> call_port({json_to_term, X, Y}).
-term_to_json(X,Y) -> call_port({term_to_json, X, Y}).
+%
 
-encode({json_to_term, X, Y})  -> ["json_to_term", X, Y];
-encode({term_to_json, X, Y}) -> [2, X, Y];
-encode({twice, X})  -> [1, X];
-encode({sum, X, Y}) -> [2, X, Y].
+parse(X)      -> parse(X, []).
 
-decode([Int]) -> Int.
+read_file(File) ->
+  { ok, Data } = file:read_file(File),
+  Data.
+
+parse_file(X) -> parse(read_file(X)).
+parse_file(X,O) -> parse(read_file(X), O).
+
+parse(X,O)  -> 
+  eep0018 ! {parse, self(), X, O},
+  receive
+    {result, Result} -> Result
+  end.

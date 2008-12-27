@@ -1,8 +1,8 @@
 #include "eep0018.h"
-
 #include "log.h"
 
-#ifndef NO_LOG
+#undef fdump
+#undef flog
 
 #include <ctype.h>
 
@@ -38,6 +38,7 @@ static const char* log_string(unsigned char value) {
     case 0: return "";
     
     test(JSON_PARSE);
+    
     test(ATOM);
     test(NUMBER);
     test(STRING);
@@ -61,5 +62,3 @@ void flog(FILE* file, const char* label, int mode, const char *buf, int len) {
 
   fdump(file, buf, len);
 }
-
-#endif

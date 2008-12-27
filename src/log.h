@@ -14,7 +14,7 @@ extern void flog(FILE* file, const char* label, int mode, const char *buf, int l
 
 #else
 
-#define nop() while(0)                    { (void)(0); }
+#define nop()   do { (void)(0); } while(0)
 
 #define fdump(file, buf, len)             nop()
 #define flog(file, label, mode, buf, len) nop()

@@ -45,33 +45,77 @@ l(X) ->
 l(M, X) ->
   io:format(M ++ ": ~p ~n", [ X ]), X.
 
+
+%
+% Options are as follows
+%
+% {float,true}
+% {label,binary|atom|existing_atom}
+% {duplicate_labels,true/false/raise} % raise badarg
+%
+
+-record(options, {list_to_label, list_to_number, duplicate_labels, strict_order}).
+
+fetch_option(Property, In, Default) ->
+  Default.
+
+build_options(In) ->
+  #options{
+    list_to_label   = list_to_label_fun(fetch_option(labels, In, binary)),
+    list_to_number  = list_to_number_fun(fetch_option(float, In, true)),
+    duplicate_labels= duplicate_labels_fun(fetch_option(duplicate_labels, In, true))
+  }.
+
+%% Convert labels
+
+list_to_label_fun(binary)         ->  fun(S) -> S end;
+list_to_label_fun(atom)           ->  
+  fun(S) -> 
+    try list_to_atom(S) of A -> A 
+    catch _:_ -> S end
+  end;
+list_to_label_fun(existing_atom)  ->  
+  fun(S) -> 
+    try list_to_existing_atom(S) of A -> A 
+    catch _:_ -> S end
+  end.
+
+list_to_label(O, S) ->
+  (O#options.list_to_label)(S).
+
+%% Convert numbers
+
+list_to_number_fun(false) ->  
+  fun(S) ->
+    try list_to_integer(S) of
+      I -> I
+    catch
+      _:_ -> list_to_float(S)
+    end
+  end;
+
+list_to_number_fun(true) ->  
+  fun(S) -> list_to_float(S) end.
+
+list_to_number(O, S) ->
+  (O#options.list_to_number)(S).
+
+%% Finish maps
+
+duplicate_labels_fun(true)  -> fun(S) -> S end.
+
+% Not yet implemented
+% duplicate_labels_fun(false)  
+% duplicate_labels_fun(raise)  
+
 %% receive values from the Sax driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%%
-%% Options are as follows
-%%
-%% {float,true}
-%% {duplicate_labels,true/false/raise} % raise badarg
-%% {label,binary|atom|existing_atom}
-%% {strict_order,true/false}
-%%
-list_to_key(S) ->
-  try list_to_atom(S) of
-    A -> A
-  catch
-    _:_ -> S
-  end.
-
-list_to_number(S) -> 
-  try list_to_integer(S) of
-    I -> I
-  catch
-    _:_ -> list_to_float(S)
-  end.
 
 receive_map(O, In) -> 
   case receive_value(O) of
-    'end' -> In;
+    'end' -> 
+      (O#options.duplicate_labels)(
+        lists:reverse(In)
+      );
     Key   -> receive_map(O, [ {Key, receive_value(O)} | In ])
   end.
 
@@ -88,9 +132,9 @@ receive_value(O) ->
     { _, { _, [ ?END ] } }    -> 'end';
 
     { _, { _, [ ?ATOM | DATA ] } }   -> list_to_atom(DATA);
-    { _, { _, [ ?NUMBER | DATA ] } } -> list_to_number(DATA);
+    { _, { _, [ ?NUMBER | DATA ] } } -> list_to_number(O, DATA);
     { _, { _, [ ?STRING | DATA ] } } -> list_to_binary(DATA);
-    { _, { _, [ ?KEY | DATA ] } }    -> list_to_key(DATA);
+    { _, { _, [ ?KEY | DATA ] } }    -> list_to_label(O, DATA);
 
     UNKNOWN                   -> io:format("UNKNOWN ~p ~n", [UNKNOWN]), UNKNOWN
   end.
@@ -99,7 +143,8 @@ loop(Port) ->
   receive
     {parse, Caller, X, O} ->
       Port ! {self(), {command, [ ?JSON_PARSE | X ]}},
-      Result = receive_value(O),
+      
+      Result = receive_value(build_options(O)),
       Caller ! {result, Result},
       loop(Port);
 

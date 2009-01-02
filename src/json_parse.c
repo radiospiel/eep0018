@@ -55,7 +55,7 @@ static yajl_callbacks erl_json_callbacks = {
   erl_json_end_array
 };
 
-void json_parse(ErlDrvData session, const unsigned char* s, int len) {
+void json_parse(ErlDrvData session, const unsigned char* s, int len, int parseInArray) {
   ErlDrvPort port = (ErlDrvPort) session;
 
   /* get a parser handle */
@@ -63,9 +63,10 @@ void json_parse(ErlDrvData session, const unsigned char* s, int len) {
   yajl_handle handle = yajl_alloc(&erl_json_callbacks, &conf, port);
 
   /* start parser */
-  yajl_status stat = yajl_parse(handle, (const unsigned char*) "[ ", 2);
+  yajl_status stat;
+  if(parseInArray) stat = yajl_parse(handle, (const unsigned char*) "[ ", 2);
   stat = yajl_parse(handle, s, len);
-  stat = yajl_parse(handle, (const unsigned char*) " ]", 2);
+  if(parseInArray) stat = yajl_parse(handle, (const unsigned char*) " ]", 2);
   
   /* if result is not ok: we might raise an error?? */
   if (stat != yajl_status_ok)

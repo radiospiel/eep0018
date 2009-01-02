@@ -5,6 +5,8 @@
 
 #define EEP0018_JSON_PARSE              1
 #define EEP0018_JSON_PARSE_EI           2
+#define EEP0018_JSON_PARSE_VALUE        3
+#define EEP0018_JSON_PARSE_VALUE_EI     4
 
 /* simple types */
 /* each simple type is followed by the actual data in a string buffer */
@@ -66,7 +68,7 @@ static inline int send_data(void* ctx, char type, const char* data, unsigned int
   return 1;
 }
 
-extern void json_parse(ErlDrvData session, const unsigned char* s, int len);
-extern void json_parse_ei(ErlDrvData session, const unsigned char* s, int len);
+extern void json_parse(ErlDrvData session, const unsigned char* s, int len, int parseInArray);
+extern void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int parseInArray);
 
 #endif

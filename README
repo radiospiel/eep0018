@@ -1,6 +1,79 @@
 This module strives to prepare an EEP0018 implemenation. It implements most of the 
 functionality described there, with some additional features.  
 
+Compiling
+=========
+
+Adjust the Makefile's top section. After that, run 
+
+  ./configure
+
+to compile everything. This results into
+
+	./bin/eep0018_drv.so
+	./bin/eep0018.beam.
+
+Running
+=======
+
+The eep0018 module exports these functions:
+
+*	start/0 starts the driver.
+*	start/1 starts the driver; the parameter is the path to the eep0018_drv.so driver
+	
+*	stop/0 stops the driver.
+	
+*	json_to_term/1 parses a JSON text
+*	json_to_term/2 parses a JSON text, with some options (See below).
+	
+*	term_to_json/1 creates a piece of JSON text.
+
+Status/TODO
+===========
+
+Please consider this software as a ALPHA release! TODOs:
+
+* Implement all missing json_to_term/2 options
+* Improve implementation of {parse,value}
+* Add native {duplicate_labels,fails} and {duplicate_labels,raise} implementation.
+* Add native {float,true} and {duplicate_labels,raise} implementation.
+
+json_to_term/2 Options
+======================
+
+(*) .. default
+
+{float,false(*)|true|intern}
+
+	true: return all numbers as floats.
+	false: return integers as integers, and floats as floats.
+	intern: return numbers as {number:"string"} tuples. (not yet implemented)
+
+{label,binary(*)|atom|existing_atom}
+
+	The "label" option defines whether or not map keys in the returned terms
+	are converted into an atom.
+	
+	binary: return map keys as binary
+	atom: return map keys as an atom, if possible, as a binary otherwise.
+	existing_atom: return map keys as an atom, if existing, as a binary otherwise.
+
+{duplicate_labels,true(*)|false|raise}
+
+	true: don't fix maps with duplicate entries
+	false: remove duplicate entries from maps (not yet implemented)
+	raise: raise an error on duplicate map entries (not yet implemented)
+
+{parse,value|object}
+
+	value: parse JSON values (i.e. "1")
+	object: parse JSON objects. JSON values that are not objects raise an exception.
+
+Note: The parameter set heavily influences the performance of the parser. The fastest
+settings are:
+ 
+	[{float,intern},{label,binary},{duplicate_labels,true},{parse,object}]
+
 YAJL
 ====
 

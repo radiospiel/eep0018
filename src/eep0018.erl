@@ -6,10 +6,15 @@
 -export([json_to_term/1, json_to_term/2]).
 -export([term_to_json/1]).
 
+-export([build_options/1]).
+
 %% constants (see eep0018.h)
 
--define(JSON_PARSE,     1).
--define(JSON_PARSE_EI,  2).
+-define(JSON_PARSE,           1).
+-define(JSON_PARSE_EI,        2).
+
+-define(JSON_PARSE_VALUE,     3).
+-define(JSON_PARSE_VALUE_EI,  4).
 
 -define(ATOM,             10).
 -define(NUMBER,           11).
@@ -19,6 +24,9 @@
 -define(ARRAY,            15).
 -define(END,              16).
 -define(EI,               17).
+
+-define(DriverMode, ei).
+% -define(DriverMode, sax).
 
 %% start/stop port
 
@@ -50,7 +58,6 @@ l(X) ->
 l(M, X) ->
   io:format(M ++ ": ~p ~n", [ X ]), X.
 
-
 %
 % Options are as follows
 %
@@ -61,14 +68,19 @@ l(M, X) ->
 
 -record(options, {list_to_label, list_to_number, duplicate_labels, strict_order}).
 
-fetch_option(Property, In, Default) ->
-  Default.
+fetch_option(Key, Dict, Default) ->
+  case dict:find(Key, Dict) of
+    {ok, Value} -> Value;
+    _ -> Default
+  end.
 
 build_options(In) ->
+  Dict = dict:from_list(In),
+
   #options{
-    list_to_label   = list_to_label_fun(fetch_option(labels, In, binary)),
-    list_to_number  = list_to_number_fun(fetch_option(float, In, true)),
-    duplicate_labels= duplicate_labels_fun(fetch_option(duplicate_labels, In, true))
+    list_to_label   = list_to_label_fun(fetch_option(labels, Dict, binary)),
+    list_to_number  = list_to_number_fun(fetch_option(float, Dict, true)),
+    duplicate_labels= duplicate_labels_fun(fetch_option(duplicate_labels, Dict, true))
   }.
 
 %% Convert labels
@@ -77,12 +89,12 @@ list_to_label_fun(binary)         ->  fun(S) -> S end;
 list_to_label_fun(atom)           ->  
   fun(S) -> 
     try list_to_atom(S) of A -> A 
-    catch _:_ -> S end
+    catch _:_ -> list_to_binary(S) end
   end;
 list_to_label_fun(existing_atom)  ->  
   fun(S) -> 
     try list_to_existing_atom(S) of A -> A 
-    catch _:_ -> S end
+    catch _:_ -> list_to_binary(S) end
   end.
 
 list_to_label(O, S) ->
@@ -106,12 +118,14 @@ list_to_number(O, S) ->
   (O#options.list_to_number)(S).
 
 %% Finish maps
+%
+% TODO: Add working implementations for duplicate_labels_fun(false), 
+% duplicate_labels_fun(raise).
+%
 
-duplicate_labels_fun(true)  -> fun(S) -> S end.
-
-% Not yet implemented
-% duplicate_labels_fun(false)  
-% duplicate_labels_fun(raise)  
+duplicate_labels_fun(true)  -> fun(S) -> S end;
+duplicate_labels_fun(false) -> fun(S) -> S end;
+duplicate_labels_fun(raise) -> fun(S) -> S end.
 
 %% receive values from the Sax driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -130,17 +144,6 @@ receive_array(O, In) ->
     T     -> receive_array(O, [ T | In ])
   end.
 
-receive_array(O, In, null) -> 
-  receive_array(O, In);
-receive_array(O, In, Consumer) -> 
-  case receive_value(O) of
-    'end' -> [];
-    T     -> Consumer(T), receive_array(O, In, Consumer)
-  end.
-
-receive_ei_encoded(DATA) ->
-   erlang:binary_to_term(list_to_binary(DATA)).
-
 receive_value(O) -> 
   receive
     { _, { _, [ ?MAP ] } }    -> receive_map(O, []);
@@ -153,30 +156,33 @@ receive_value(O) ->
     { _, { _, [ ?KEY | DATA ] } }    -> list_to_label(O, DATA);
 
     { _, { _, [ ?EI | DATA ] } }     -> receive_ei_encoded(DATA);
-    % erlang:binary_to_term(DATA);
 
     UNKNOWN                   -> io:format("UNKNOWN 1 ~p ~n", [UNKNOWN]), UNKNOWN
   end.
 
-receive_toplevel_value(O, Consumer) ->
-  receive
-    { _, { _, [ ?MAP ] } }        -> receive_map(O, []);
-    { _, { _, [ ?ARRAY ] } }      -> receive_array(O, [], Consumer);
-    { _, { _, [ ?EI | DATA ] } }  -> receive_ei_encoded(DATA);
-    
-    UNKNOWN                   -> io:format("UNKNOWN 2 ~p ~n", [UNKNOWN]), UNKNOWN
-  end.
+receive_value(object, O)  -> receive_value(O);
+receive_value(value, O)   -> [ Value ] = receive_value(O), Value.
+
+%% receive values from the EI driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+receive_ei_encoded(DATA) ->
+  erlang:binary_to_term(list_to_binary(DATA)).
 
 loop(Port) ->
   receive
     {parse, Caller, X, O} ->
-      % Port ! {self(), {command, [ ?JSON_PARSE | X ]}},
-      Port ! {self(), {command, [ ?JSON_PARSE_EI | X ]}},
+      Parse = fetch_option(parse, dict:from_list(O), object),
+      Cmd = case {?DriverMode, Parse} of
+        {ei, object}  -> ?JSON_PARSE_EI;
+        {ei, value}   -> ?JSON_PARSE_VALUE_EI;
+        {sax, object} -> ?JSON_PARSE;
+        {sax, value}  -> ?JSON_PARSE_VALUE
+      end,
+        
+      Port ! {self(), {command, [ Cmd | X ]}},
       
-      Toplevel = fun(S) -> Caller ! {object, S} end,
-      
-      Result = receive_toplevel_value(build_options(O), Toplevel),
-      
+      Result = receive_value(Parse, build_options(O)),
+      io:format("got value: ~p~n", [ Result ]),
       Caller ! {result, Result},
       loop(Port);
 
@@ -195,15 +201,11 @@ loop(Port) ->
       loop(Port)
   end.
 
-%% control loop for driver
+%% parse json
 
 parse(X,O)  -> 
   eep0018 ! {parse, self(), X, O},
-  receive_results().
-  
-receive_results() ->
   receive
-    {object, Object} -> [ Object | receive_results() ];
     {result, Result} -> Result
   end.
 
@@ -211,7 +213,8 @@ receive_results() ->
 
 %
 %
-json_to_term(X) -> parse(X, []).
+json_to_term(X) -> parse(X, 
+  [{float,false},{label,binary},{duplicate_labels,true},{parse,object}]).
 json_to_term(X,O) -> parse(X, O).
 
 % 

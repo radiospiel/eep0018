@@ -1,0 +1,9 @@
+Testcases
+
+are in the complete, incomplete, and benchmark subdirectories.
+
+./complete 		- testcases containing JSON objects (i.e. arrays or maps) 
+./incomplete 	- testcases containing JSON values (i.e. strings, numbers, etc.)
+./benchmark 	- larger testcases.
+
+Run those testcases using the "./runner" shell script.

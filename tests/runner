@@ -1,0 +1,6 @@
+#!/bin/bash
+make -C ..
+make 
+erl -pa ../bin -eval 'runner:run("complete").'
+#erl -pa ../bin -eval 'runner:run("incomplete").'
+erl -pa ../bin -eval 'runner:run("benchmark").'

@@ -6,7 +6,9 @@
 
 %% constants (see eep0018.h)
 
--define(JSON_PARSE,       1).
+-define(JSON_PARSE,     1).
+-define(JSON_PARSE_EI,  2).
+
 -define(ATOM,             10).
 -define(NUMBER,           11).
 -define(STRING,           12).
@@ -14,6 +16,7 @@
 -define(MAP,              14).
 -define(ARRAY,            15).
 -define(END,              16).
+-define(EI,               17).
 
 %% start/stop port
 
@@ -119,13 +122,24 @@ receive_map(O, In) ->
     Key   -> receive_map(O, [ {Key, receive_value(O)} | In ])
   end.
 
-receive_array(O, In) -> 
+receive_array(O, In) ->  
   case receive_value(O) of
     'end' -> lists:reverse(In);
     T     -> receive_array(O, [ T | In ])
   end.
 
-receive_value(O) ->
+receive_array(O, In, null) -> 
+  receive_array(O, In);
+receive_array(O, In, Consumer) -> 
+  case receive_value(O) of
+    'end' -> [];
+    T     -> Consumer(T), receive_array(O, In, Consumer)
+  end.
+
+receive_ei_encoded(DATA) ->
+   erlang:binary_to_term(list_to_binary(DATA)).
+
+receive_value(O) -> 
   receive
     { _, { _, [ ?MAP ] } }    -> receive_map(O, []);
     { _, { _, [ ?ARRAY ] } }  -> receive_array(O, []);
@@ -136,15 +150,31 @@ receive_value(O) ->
     { _, { _, [ ?STRING | DATA ] } } -> list_to_binary(DATA);
     { _, { _, [ ?KEY | DATA ] } }    -> list_to_label(O, DATA);
 
-    UNKNOWN                   -> io:format("UNKNOWN ~p ~n", [UNKNOWN]), UNKNOWN
+    { _, { _, [ ?EI | DATA ] } }     -> receive_ei_encoded(DATA);
+    % erlang:binary_to_term(DATA);
+
+    UNKNOWN                   -> io:format("UNKNOWN 1 ~p ~n", [UNKNOWN]), UNKNOWN
   end.
-  
+
+receive_toplevel_value(O, Consumer) ->
+  receive
+    { _, { _, [ ?MAP ] } }        -> receive_map(O, []);
+    { _, { _, [ ?ARRAY ] } }      -> receive_array(O, [], Consumer);
+    { _, { _, [ ?EI | DATA ] } }  -> receive_ei_encoded(DATA);
+    
+    UNKNOWN                   -> io:format("UNKNOWN 2 ~p ~n", [UNKNOWN]), UNKNOWN
+  end.
+
 loop(Port) ->
   receive
     {parse, Caller, X, O} ->
-      Port ! {self(), {command, [ ?JSON_PARSE | X ]}},
+      % Port ! {self(), {command, [ ?JSON_PARSE | X ]}},
+      Port ! {self(), {command, [ ?JSON_PARSE_EI | X ]}},
       
-      Result = receive_value(build_options(O)),
+      Toplevel = fun(S) -> Caller ! {object, S} end,
+      
+      Result = receive_toplevel_value(build_options(O), Toplevel),
+      
       Caller ! {result, Result},
       loop(Port);
 
@@ -178,6 +208,10 @@ parse_file(X,O) -> parse(read_file(X), O).
 
 parse(X,O)  -> 
   eep0018 ! {parse, self(), X, O},
+  receive_results().
+  
+receive_results() ->
   receive
+    {object, Object} -> [ Object | receive_results() ];
     {result, Result} -> Result
   end.

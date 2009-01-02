@@ -1,7 +1,9 @@
 eep0018:start().
 
-eep0018:parse("[ \"abc\" ]").
-eep0018:parse("[ \"abc\", \"end\" ]").
+%eep0018:parse("[ \"1\" ]").
+%eep0018:parse("[ \"abc\" ]").
+%eep0018:parse("[ \"abc\", \"end\" ]").
+%eep0018:parse("{ \"abc\": \"end\" }").
 
 %eep0018:parse_file("../test/test.json").
 %eep0018:parse_file("../test/test-med.json"), nil.
@@ -9,11 +11,11 @@ eep0018:parse("[ \"abc\", \"end\" ]").
 
 Parse_file=fun(File) -> 
 	{ ok, Data } = file:read_file(File),
-	benchmark:run(File ++ " [eep0018]: ", fun() -> eep0018:parse(Data) end),
-	benchmark:run(File ++ " [rabbitmq]: ", fun() -> rabbitmq:decode(Data) end),
+	benchmark:run3(File ++ " [eep0018]: ", fun() -> eep0018:parse(Data) end),
+	benchmark:run3(File ++ " [rabbitmq]: ", fun() -> rabbitmq:decode(Data) end),
 	nil
 end.
 
-Parse_file("../test/test.json").
-Parse_file("../test/test-med.json").
+%Parse_file("../test/test.json").
+%Parse_file("../test/test-med.json").
 Parse_file("../test/test-big.json").

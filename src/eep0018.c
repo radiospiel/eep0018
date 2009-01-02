@@ -147,6 +147,34 @@ static void eep0018_drv_on_input(ErlDrvData session, char *buf, int len)
     json_parse(port, (unsigned char*) buf+1, len-1);
     break;
 
+  case EEP0018_JSON_PARSE_EI: {
+    ei_x_buff x;
+    ei_x_new_with_version(&x);
+
+#if 1
+    json_to_binary(&x, (unsigned char*) buf+1, len-1);
+#endif
+
+#if 0     
+    ei_x_encode_list_header(&x, 1);
+    ei_x_encode_ulong(&x, 1); 
+    ei_x_encode_list_header(&x, 1);
+    ei_x_encode_ulong(&x, 2);
+    ei_x_encode_empty_list(&x);
+#endif
+
+#if 0
+    ei_x_encode_list_header(&x, 1);
+    ei_x_encode_tuple_header(&x, 2);
+    ei_x_encode_binary(&x, "key", 3);
+    ei_x_encode_ulong(&x, 2); 
+    ei_x_encode_empty_list(&x);
+#endif
+
+    send_data(port, EEP0018_EI, x.buff, x.index);
+    ei_x_free(&x);
+  break;
+  }
   default:
     flog(stderr, "Unknown input", 0, buf, len);
   }

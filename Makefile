@@ -42,7 +42,7 @@ VPATH=src:$(YAJLROOT)/src
 
 YAJL_OBJECTS=yajl.o yajl_encode.o yajl_lex.o yajl_buf.o yajl_gen.o yajl_parser.o
 # EEP_OBJECTS=json_to_term.o term_to_json.o eep0018.o
-EEP_OBJECTS=eep0018.o log.o
+EEP_OBJECTS=eep0018.o log.o json_to_binary.o
 
 PATHS=bin include include/yajl
 

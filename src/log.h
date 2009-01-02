@@ -9,8 +9,8 @@
 
 #ifndef NO_LOG
 
-extern void fdump(FILE* file, const char *buf, int len);
-extern void flog(FILE* file, const char* label, int mode, const char *buf, int len);
+extern void fdump(FILE* file, const void *buf, int len);
+extern void flog(FILE* file, const char* label, int mode, const void *buf, int len);
 
 #else
 

@@ -3,7 +3,7 @@
 -export([run3/1, run3/2]).
 
 run(Fun) ->
-  run("", Fun).
+  run("*", Fun).
 
 timed(Fun) ->
   T1 = erlang:now(),
@@ -13,14 +13,14 @@ timed(Fun) ->
 
 run(Label, Fun) ->
   {R,MSecs} = timed(Fun),
-  io:format(Label ++ "Elapsed time: ~w ms ~n" , [MSecs]),
+  io:format(Label ++ " Elapsed time: ~w ms ~n" , [MSecs]),
   R.
 
 run3(Fun) ->
-  run("", Fun).
+  run("*", Fun).
 
 run3(Label, Fun) ->
   Fun(),
   {R,MSecs} = timed(fun() -> Fun(), Fun() end),
-  io:format(Label ++ "Elapsed time: ~w ms ~n" , [MSecs/2]),
+  io:format(Label ++ " Elapsed time: ~w ms ~n" , [MSecs/2]),
   R.

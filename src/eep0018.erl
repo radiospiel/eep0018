@@ -1,8 +1,10 @@
 -module(eep0018).
 
--export([start/0, stop/0]).
--export([parse/1, parse/2]).
--export([parse_file/1, parse_file/2]).
+-export([start/0, start/1]).
+-export([stop/0]).
+
+-export([json_to_term/1, json_to_term/2]).
+-export([term_to_json/1]).
 
 %% constants (see eep0018.h)
 
@@ -21,16 +23,16 @@
 %% start/stop port
 
 start() ->
-  start("eep0018_drv").
+  start(".").
  
-start(SharedLib) ->
-  case erl_ddll:load_driver(".", SharedLib) of
+start(LibPath) ->
+  case erl_ddll:load_driver(LibPath, "eep0018_drv") of
     ok -> ok;
     {error, already_loaded} -> ok;
     {error, X} -> exit({error, X});
     _ -> exit({error, could_not_load_driver})
   end,
-  spawn(fun() -> init(SharedLib) end).
+  spawn(fun() -> init("eep0018_drv") end).
 
 init(SharedLib) ->
   register(eep0018, self()),
@@ -195,17 +197,6 @@ loop(Port) ->
 
 %% control loop for driver
 
-%
-
-parse(X)      -> parse(X, []).
-
-read_file(File) ->
-  { ok, Data } = file:read_file(File),
-  Data.
-
-parse_file(X) -> parse(read_file(X)).
-parse_file(X,O) -> parse(read_file(X), O).
-
 parse(X,O)  -> 
   eep0018 ! {parse, self(), X, O},
   receive_results().
@@ -215,3 +206,14 @@ receive_results() ->
     {object, Object} -> [ Object | receive_results() ];
     {result, Result} -> Result
   end.
+
+% The public, EEP0018-like interface.
+
+%
+%
+json_to_term(X) -> parse(X, []).
+json_to_term(X,O) -> parse(X, O).
+
+% 
+term_to_json(X) -> 
+  rabbitmq:encode(X).

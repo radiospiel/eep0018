@@ -1,21 +1,23 @@
 eep0018:start().
 
-%eep0018:parse("[ \"1\" ]").
-%eep0018:parse("[ \"abc\" ]").
-%eep0018:parse("[ \"abc\", \"end\" ]").
-%eep0018:parse("{ \"abc\": \"end\" }").
+eep0018:json_to_term("[ \"1\" ]").
+eep0018:json_to_term("[ 2 ]").
 
-%eep0018:parse_file("../test/test.json").
-%eep0018:parse_file("../test/test-med.json"), nil.
-%eep0018:parse_file("../test/test-big.json"), nil.
+%eep0018:json_to_term("[ \"abc\" ]").
+%eep0018:json_to_term("[ \"abc\", \"end\" ]").
+%eep0018:json_to_term("{ \"abc\": \"end\" }").
+
+%eep0018:json_to_term_file("../test/test.json").
+%eep0018:json_to_term_file("../test/test-med.json"), nil.
+%eep0018:json_to_term_file("../test/test-big.json"), nil.
 
 Parse_file=fun(File) -> 
 	{ ok, Data } = file:read_file(File),
-	benchmark:run3(File ++ " [eep0018]: ", fun() -> eep0018:parse(Data) end),
+	benchmark:run3(File ++ " [eep0018]: ", fun() -> eep0018:json_to_term(Data) end),
 	benchmark:run3(File ++ " [rabbitmq]: ", fun() -> rabbitmq:decode(Data) end),
 	nil
 end.
 
 %Parse_file("../test/test.json").
 %Parse_file("../test/test-med.json").
-Parse_file("../test/test-big.json").
+%Parse_file("../test/test-big.json").

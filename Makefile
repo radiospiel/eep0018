@@ -3,7 +3,8 @@
 # still adjust your local settings in Makefile.local.
 
 include Makefile.$(shell uname -s)
-include Makefile.local
+-include Makefile.local
+
 # -----------------------------------------------------------------------------
 # Usually no changes below that line...
 

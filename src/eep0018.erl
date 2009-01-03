@@ -29,7 +29,7 @@ start(LibPath) ->
 
 init(SharedLib) ->
   register(eep0018, self()),
-  Port = open_port({spawn, SharedLib}, []),
+  Port = open_port({spawn, SharedLib}, [binary]),
   loop(Port).
 
 stop() ->
@@ -151,7 +151,7 @@ adjust_ei_encoded(O, In) ->
   end.
 
 receive_ei_encoded(O, DATA) ->
-  Raw = erlang:binary_to_term(list_to_binary(DATA)),
+  Raw = erlang:binary_to_term(DATA),
 
   %
   % If the caller knows what he does we might not have to adjust 

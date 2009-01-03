@@ -32,8 +32,10 @@
 
 -define(EI,               17).
 
--define(DriverMode, ei).
-%-define(DriverMode, sax).
+-define(DriverMode, 
+%  sax
+  ei
+).
 
 %% start/stop port
 
@@ -69,7 +71,7 @@ l(M, X) ->
 % Options are as follows
 %
 
--record(options, {list_to_label, list_to_number, number_to_number, duplicate_labels}).
+-record(options, {binary_to_label, list_to_number, number_to_number, duplicate_labels}).
 
 fetch_option(Key, Dict, Default) ->
   case dict:find(Key, Dict) of
@@ -81,7 +83,7 @@ build_options(In) ->
   Dict = dict:from_list(In),
   
   #options{
-    list_to_label   = list_to_label_fun(fetch_option(labels, Dict, binary)),
+    binary_to_label   = binary_to_label_fun(fetch_option(labels, Dict, binary)),
     list_to_number  = list_to_number_fun(fetch_option(float, Dict, true)),
     number_to_number= number_to_number_fun(fetch_option(float, Dict, true)),
     duplicate_labels= duplicate_labels_fun(fetch_option(duplicate_labels, Dict, true))
@@ -89,23 +91,26 @@ build_options(In) ->
 
 %% Convert labels
 
-list_to_label_fun(binary)         ->  fun(S) -> S end;
-list_to_label_fun(atom)           ->  
-  fun(S) -> 
-    try list_to_atom(S) of A -> A 
-    catch _:_ -> list_to_binary(S) end
+binary_to_label_fun(binary)         ->  
+  fun(B) -> B end;
+binary_to_label_fun(atom)           ->  
+  fun(B) -> 
+    try list_to_atom(binary_to_list(B)) of A -> A 
+    catch _:_ -> B end
   end;
-list_to_label_fun(existing_atom)  ->  
-  fun(S) -> 
-    try list_to_existing_atom(S) of A -> A 
-    catch _:_ -> list_to_binary(S) end
+binary_to_label_fun(existing_atom)  ->  
+  fun(B) -> 
+    try list_to_existing_atom(binary_to_list(B)) of A -> A 
+    catch _:_ -> B end
   end.
 
-list_to_label(O, S) ->
-  (O#options.list_to_label)(S).
+binary_to_label(O, S) ->
+  (O#options.binary_to_label)(S).
 
 %% Convert numbers
 
+list_to_number_fun(intern) ->  
+  fun(S) -> {number,S} end;
 list_to_number_fun(false) ->  
   fun(S) ->
     try list_to_integer(S) of
@@ -114,7 +119,6 @@ list_to_number_fun(false) ->
       _:_ -> list_to_float(S)
     end
   end;
-
 list_to_number_fun(true) ->  
   fun(S) ->
     try list_to_integer(S) of
@@ -124,14 +128,15 @@ list_to_number_fun(true) ->
   end
 end.
 
-list_to_number(O, S) ->
-  (O#options.list_to_number)(S).
-
-
+number_to_number_fun(intern) ->  
+  fun(S) -> S end;
 number_to_number_fun(true) ->
   fun(N) -> 0.0 + N end;
 number_to_number_fun(false) ->
   fun(N) -> N end.
+
+list_to_number(O, S) ->
+  (O#options.list_to_number)(S).
 
 number_to_number(O, S) ->
   (O#options.number_to_number)(S).
@@ -172,7 +177,7 @@ receive_value(O) ->
     { _, { _, [ ?ATOM | DATA ] } }   -> list_to_atom(DATA);
     { _, { _, [ ?NUMBER | DATA ] } } -> list_to_number(O, DATA);
     { _, { _, [ ?STRING | DATA ] } } -> list_to_binary(DATA);
-    { _, { _, [ ?KEY | DATA ] } }    -> list_to_label(O, DATA);
+    { _, { _, [ ?KEY | DATA ] } }    -> binary_to_label(O, list_to_binary(DATA));
 
     { _, { _, [ ?EI | DATA ] } }     -> receive_ei_encoded(O, DATA);
 
@@ -184,16 +189,17 @@ receive_value(value, O)   -> [ Value ] = receive_value(O), Value.
 
 %% receive values from the EI driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-adjust_ei_encoded(O, {number,S})          -> (O#options.list_to_number)(S);
-adjust_ei_encoded(O, {K,V})               -> {(O#options.list_to_label)(K),V};
-adjust_ei_encoded(O, [H|T])               -> lists:map(fun(S) -> adjust_ei_encoded(O, S) end, [H|T]);
-adjust_ei_encoded(O, X) when is_number(X) -> number_to_number(O, X);
-adjust_ei_encoded(_, X)                   -> X.
+adjust_ei_encoded(O, In) ->
+  case In of
+    {number,S}          -> (O#options.list_to_number)(S);
+    {K,V}               -> {(O#options.binary_to_label)(K),V};
+    [H|T]               -> lists:map(fun(S) -> adjust_ei_encoded(O, S) end, [H|T]);
+    X when is_number(X) -> number_to_number(O, X);
+    X                   -> X
+  end.
 
 receive_ei_encoded(O, DATA) ->
   Raw = erlang:binary_to_term(list_to_binary(DATA)),
-  l("raw", Raw),
   adjust_ei_encoded(O, Raw).
 
 loop(Port) ->

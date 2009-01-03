@@ -1,0 +1,11 @@
+eep0018:start().
+
+Parse_file=fun(File) -> 
+	{ ok, Data } = file:read_file(File),
+	benchmark:run3(File ++ " [eep0018]: ", fun() -> eep0018:json_to_term(Data) end),
+	benchmark:run3(File ++ " [rabbitmq]: ", fun() -> rabbitmq:decode(Data) end),
+	nil
+end.
+
+Parse_file("../test/test-med.json").
+Parse_file("../test/test-big.json").

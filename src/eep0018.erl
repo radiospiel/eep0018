@@ -67,11 +67,23 @@ l(X) ->
 l(M, X) ->
   io:format(M ++ ": ~p ~n", [ X ]), X.
 
+%% Misc utils
+
+identity(S) -> S.
+
 %
 % Options are as follows
 %
 
--record(options, {binary_to_label, list_to_number, number_to_number, duplicate_labels}).
+-record(options, {
+  % original values
+  labels,
+  float,
+  duplicate_labels,
+
+  % implementations
+  binary_to_label, list_to_number, number_to_number, tuple_to_number, check_labels
+}).
 
 fetch_option(Key, Dict, Default) ->
   case dict:find(Key, Dict) of
@@ -82,81 +94,83 @@ fetch_option(Key, Dict, Default) ->
 build_options(In) ->
   Dict = dict:from_list(In),
   
+  Opt_labels = fetch_option(labels, Dict, binary),
+  Opt_float = fetch_option(float, Dict, true),
+  Opt_duplicate_labels = fetch_option(duplicate_labels, Dict, true),
+  
   #options{
-    binary_to_label   = binary_to_label_fun(fetch_option(labels, Dict, binary)),
-    list_to_number  = list_to_number_fun(fetch_option(float, Dict, true)),
-    number_to_number= number_to_number_fun(fetch_option(float, Dict, true)),
-    duplicate_labels= duplicate_labels_fun(fetch_option(duplicate_labels, Dict, true))
+    labels = Opt_labels,
+    float = Opt_float,
+    duplicate_labels = Opt_duplicate_labels,
+
+    binary_to_label   = binary_to_label_fun(Opt_labels),
+
+    list_to_number  = list_to_number_fun(Opt_float),
+    number_to_number= number_to_number_fun(Opt_float),
+    tuple_to_number = tuple_to_number_fun(Opt_float),
+    
+    check_labels= check_labels_fun(Opt_duplicate_labels)
   }.
 
 %% Convert labels
 
-binary_to_label_fun(binary)         ->  
-  fun(B) -> B end;
-binary_to_label_fun(atom)           ->  
-  fun(B) -> 
-    try list_to_atom(binary_to_list(B)) of A -> A 
-    catch _:_ -> B end
-  end;
-binary_to_label_fun(existing_atom)  ->  
-  fun(B) -> 
-    try list_to_existing_atom(binary_to_list(B)) of A -> A 
-    catch _:_ -> B end
-  end.
+to_existing_atom(V) when is_list(V) -> try list_to_existing_atom(V) catch _:_ -> V end;
+to_existing_atom(V)                 -> to_existing_atom(binary_to_list(V)).
+
+to_atom(V) when is_list(V)  -> try list_to_atom(V) catch _:_ -> V end;
+to_atom(V)                  -> to_atom(binary_to_list(V)).
+
+binary_to_label_fun(binary)         -> fun identity/1; 
+binary_to_label_fun(atom)           -> fun to_atom/1;
+binary_to_label_fun(existing_atom)  -> fun to_existing_atom/1.
 
 binary_to_label(O, S) ->
   (O#options.binary_to_label)(S).
 
 %% Convert numbers
 
-list_to_number_fun(intern) ->  
-  fun(S) -> {number,S} end;
-list_to_number_fun(false) ->  
-  fun(S) ->
-    try list_to_integer(S) of
-      I -> I
-    catch
-      _:_ -> list_to_float(S)
-    end
-  end;
-list_to_number_fun(true) ->  
-  fun(S) ->
-    try list_to_integer(S) of
-      I -> 0.0 + I
-  catch
-    _:_ -> list_to_float(S)
-  end
-end.
+to_number(S) ->  
+  try list_to_integer(S) 
+  catch _:_ -> list_to_float(S)
+  end.
 
-number_to_number_fun(intern) ->  
-  fun(S) -> S end;
-number_to_number_fun(true) ->
-  fun(N) -> 0.0 + N end;
-number_to_number_fun(false) ->
-  fun(N) -> N end.
+to_float(S) ->  
+  try list_to_integer(S) + 0.0 
+  catch _:_ -> list_to_float(S)
+  end.
+
+list_to_number_fun(intern) -> fun(S) -> {number,S} end;   % Simulate 'float:intern' mode
+                                                          % for the sax parser
+list_to_number_fun(false) ->  fun to_number/1;
+list_to_number_fun(true)  ->  fun to_float/1.
+
+number_to_number_fun(intern) ->   fun identity/1; 
+number_to_number_fun(false) ->    fun identity/1;
+number_to_number_fun(true) ->     fun(N) -> 0.0 + N end.
+
+tuple_to_number_fun(intern) ->   fun identity/1; 
+tuple_to_number_fun(false) ->    fun({_,S}) -> to_number(S) end;
+tuple_to_number_fun(true) ->     fun({_,S}) -> to_float(S) end.
 
 list_to_number(O, S) ->
   (O#options.list_to_number)(S).
 
-number_to_number(O, S) ->
-  (O#options.number_to_number)(S).
-
 %% Finish maps
 %
-% TODO: Add working implementations for duplicate_labels_fun(false), 
-% duplicate_labels_fun(raise).
+% TODO: Add working implementations for check_labels_fun(false), 
+% check_labels_fun(raise).
 %
 
-duplicate_labels_fun(true)  -> fun(S) -> S end;
-duplicate_labels_fun(false) -> fun(S) -> S end;
-duplicate_labels_fun(raise) -> fun(S) -> S end.
+check_labels_fun(true)  -> fun identity/1;
+check_labels_fun(false) -> fun identity/1;
+check_labels_fun(raise) -> fun identity/1.
 
 %% receive values from the Sax driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 receive_map(O, In) -> 
   case receive_value(O) of
     'end' -> 
-      (O#options.duplicate_labels)(
+      (O#options.check_labels)(
         lists:reverse(In)
       );
     Key   -> receive_map(O, [ {Key, receive_value(O)} | In ])
@@ -191,16 +205,27 @@ receive_value(value, O)   -> [ Value ] = receive_value(O), Value.
 
 adjust_ei_encoded(O, In) ->
   case In of
-    {number,S}          -> (O#options.list_to_number)(S);
+    {number,_}          -> (O#options.tuple_to_number)(In);
     {K,V}               -> {(O#options.binary_to_label)(K),V};
     [H|T]               -> lists:map(fun(S) -> adjust_ei_encoded(O, S) end, [H|T]);
-    X when is_number(X) -> number_to_number(O, X);
+    X when is_number(X) -> (O#options.number_to_number)(O, X);
     X                   -> X
   end.
 
 receive_ei_encoded(O, DATA) ->
   Raw = erlang:binary_to_term(list_to_binary(DATA)),
-  adjust_ei_encoded(O, Raw).
+
+  %
+  % If the caller knows what he does we might not have to adjust 
+  % the returned data:
+  % - numbers are accepted as {number, String} tuple
+  % - map keys are not to be stored as atoms.
+  % - duplicate map keys are ok.
+  %
+  case {O#options.labels, O#options.float, O#options.duplicate_labels} of
+    {binary, intern, true} -> Raw;
+    _ -> adjust_ei_encoded(O, Raw)
+  end.
 
 loop(Port) ->
   receive

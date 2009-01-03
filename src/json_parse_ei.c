@@ -238,8 +238,6 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
     ((opts & EEP0018_JSON_PARSE_RAW_NUMBERS) ? &callbacks_w_numbers : &callbacks_w_number_tuple), 
     &conf, &state);
 
-#if 0
-#else
   /* start parser */
   yajl_status stat;
   if(parseInArray) stat = yajl_parse(handle, (const unsigned char*) "[ ", 2);
@@ -257,7 +255,6 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
   {
     // fwrite(buf, 1, len, stdout);
   }  
-#endif
 
   send_data(port, EEP0018_EI, state.ei_buf.buff, state.ei_buf.index);
   ei_x_free(&state.ei_buf);

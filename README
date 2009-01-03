@@ -57,6 +57,8 @@ json_to_term/2 Options
 	atom: return map keys as an atom, if possible, as a binary otherwise.
 	existing_atom: return map keys as an atom, if existing, as a binary otherwise.
 
+	Note: the "existing_atom" option slows down things terribly, if the atoms don't exist.
+
 {duplicate_labels,true(*)|false|raise}
 
 	true: don't fix maps with duplicate entries

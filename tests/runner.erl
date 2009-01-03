@@ -82,6 +82,7 @@ run_module(true, Label, true, Func) ->
 
 single(Cases, Encode, Decode) ->
     lists:foreach(fun({Json, Term, Case}) ->
+        % io:format("~p ~n", [ Case ]),
         case Term of
         nil ->
             Decode(Json);

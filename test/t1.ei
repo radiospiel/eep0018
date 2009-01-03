@@ -1,5 +1,7 @@
 eep0018:start().
 
+eep0018:json_to_term("[]").
+
 eep0018:json_to_term("[ 0, [ 1, 2 ] ]").
 
 eep0018:json_to_term("[ [ 1 ] ]").
@@ -18,5 +20,5 @@ eep0018:json_to_term("2", [{parse,value}, {float,intern}]).
 eep0018:json_to_term("[ 3 ]").
 eep0018:json_to_term("[[ 2 ]]").
 eep0018:json_to_term("[ 1,2,3 ]").
-eep0018:json_to_term("[ 1,2,[3,4], [5] ]").
+eep0018:json_to_term("[ 1,2,[3,4], [5], 6 ]").
 

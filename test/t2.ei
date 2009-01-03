@@ -1,7 +1,7 @@
 % some map test cases
 
 eep0018:start().
-
+eep0018:json_to_term("{}").
 eep0018:json_to_term("{ \"abc\": \"end\", \"x\": \"y\" }").
 eep0018:json_to_term("{ \"t\": true, \"f\": false }").
 eep0018:json_to_term("{ \"abc\": \"end\" }").

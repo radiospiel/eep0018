@@ -19,14 +19,15 @@
  *  on the first item in the array. Sounds weird?!
  */
 
-// The current state
 typedef struct {
   ei_x_buff ei_buf;
+  /*
+   * skip_value_list_header might contain the index of the last 
+   * list header. This is used to undo the last list header 
+   * for empty lists, and to remember that we are on a list head.
+   */
   int skip_value_list_header;
 } State;
-
-#define FALSE 0
-#define TRUE  -1
 
 #ifndef NDEBUG
 
@@ -55,7 +56,7 @@ static void inline value_list_header(State* pState) {
   if(!pState->skip_value_list_header) 
     ei_x_encode_list_header(&pState->ei_buf, 1);
   else
-    pState->skip_value_list_header = FALSE;
+    pState->skip_value_list_header = 0;
 }
 
 static int erl_json_ei_null(void* ctx) {
@@ -125,26 +126,41 @@ static int erl_json_ei_string(void* ctx, const unsigned char* val, unsigned int 
   return 1;
 }
 
-static int erl_json_ei_start_map(void* ctx) {
+static int erl_json_ei_start_array(void* ctx) {
   State* pState = (State*) ctx;
 
-  flog(stderr, "start map", 0, 0, 0);
+  flog(stderr, "start array", 0, 0, 0);
   
   value_list_header(pState);
   
+  pState->skip_value_list_header = pState->ei_buf.index;
   ei_x_encode_list_header(&pState->ei_buf, 1);
-  pState->skip_value_list_header = TRUE;
-  
+
   return 1;
 }
 
-static int erl_json_ei_end_map(void* ctx) {
+static int erl_json_ei_end_array(void* ctx) {
   State* pState = (State*) ctx;
 
-  flog(stderr, "end map", 0, 0, 0);
+  flog(stderr, "end array", 0, 0, 0);
+  
+  if(pState->skip_value_list_header) {
+    pState->ei_buf.index = pState->skip_value_list_header;
+    pState->skip_value_list_header = 0;
+  }
   ei_x_encode_empty_list(&pState->ei_buf);
 
   return 1;
+}
+
+static int erl_json_ei_start_map(void* ctx) {
+  flog(stderr, "start map", 0, 0, 0);
+  return erl_json_ei_start_array(ctx);
+}
+
+static int erl_json_ei_end_map(void* ctx) {
+  flog(stderr, "end map", 0, 0, 0);
+  return erl_json_ei_end_array(ctx);
 }
 
 static int erl_json_ei_map_key(void* ctx, const unsigned char* buf, unsigned int len) {
@@ -157,32 +173,11 @@ static int erl_json_ei_map_key(void* ctx, const unsigned char* buf, unsigned int
   ei_x_encode_tuple_header(&pState->ei_buf, 2);
   ei_x_encode_binary(&pState->ei_buf, buf, len);
   
-  pState->skip_value_list_header = TRUE;
+  pState->skip_value_list_header = -1;
   
   return 1;
 }
 
-static int erl_json_ei_start_array(void* ctx) {
-  State* pState = (State*) ctx;
-
-  flog(stderr, "start array", 0, 0, 0);
-  
-  value_list_header(pState);
-  
-  ei_x_encode_list_header(&pState->ei_buf, 1);
-  pState->skip_value_list_header = TRUE;
-
-  return 1;
-}
-
-static int erl_json_ei_end_array(void* ctx) {
-  State* pState = (State*) ctx;
-
-  flog(stderr, "end array", 0, 0, 0);
-  ei_x_encode_empty_list(&pState->ei_buf);
-
-  return 1;
-}
 
 /*
  * This setting sends numbers as a {number, <<"String">>} tuple
@@ -230,7 +225,7 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
    */
   State state;
   ei_x_new_with_version(&state.ei_buf);
-  state.skip_value_list_header = TRUE;
+  state.skip_value_list_header = -1;
 
   /* get a parser handle */
   yajl_parser_config conf = { YAJL_ALLOW_COMMENTS, YAJL_CHECK_UTF8 };

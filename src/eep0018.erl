@@ -8,34 +8,10 @@
 
 %% constants (see eep0018.h)
 
-% commands
-
--define(JSON_PARSE,           1).
 -define(JSON_PARSE_EI,        2).
-
-% options
-
 -define(JSON_PARSE_IN_VALUE, 1).
 -define(JSON_PARSE_RAW_NUMBERS, 2).
-
-% sax parser types
-
--define(ATOM,             10).
--define(NUMBER,           11).
--define(STRING,           12).
--define(KEY,              13).
--define(MAP,              14).
--define(ARRAY,            15).
--define(END,              16).
-
-% ei parser type
-
 -define(EI,               17).
-
--define(DriverMode, 
-%  sax
-  ei
-).
 
 %% start/stop port
 
@@ -82,7 +58,7 @@ identity(S) -> S.
   duplicate_labels,
 
   % implementations
-  binary_to_label, list_to_number, number_to_number, tuple_to_number, check_labels
+  binary_to_label, number_to_number, tuple_to_number, check_labels
 }).
 
 fetch_option(Key, Dict, Default) ->
@@ -105,7 +81,6 @@ build_options(In) ->
 
     binary_to_label   = binary_to_label_fun(Opt_labels),
 
-    list_to_number  = list_to_number_fun(Opt_float),
     number_to_number= number_to_number_fun(Opt_float),
     tuple_to_number = tuple_to_number_fun(Opt_float),
     
@@ -124,9 +99,6 @@ binary_to_label_fun(binary)         -> fun identity/1;
 binary_to_label_fun(atom)           -> fun to_atom/1;
 binary_to_label_fun(existing_atom)  -> fun to_existing_atom/1.
 
-binary_to_label(O, S) ->
-  (O#options.binary_to_label)(S).
-
 %% Convert numbers
 
 to_number(S) ->  
@@ -139,11 +111,6 @@ to_float(S) ->
   catch _:_ -> list_to_float(S)
   end.
 
-list_to_number_fun(intern) -> fun(S) -> {number,S} end;   % Simulate 'float:intern' mode
-                                                          % for the sax parser
-list_to_number_fun(false) ->  fun to_number/1;
-list_to_number_fun(true)  ->  fun to_float/1.
-
 number_to_number_fun(intern) ->   fun identity/1; 
 number_to_number_fun(false) ->    fun identity/1;
 number_to_number_fun(true) ->     fun(N) -> 0.0 + N end.
@@ -151,9 +118,6 @@ number_to_number_fun(true) ->     fun(N) -> 0.0 + N end.
 tuple_to_number_fun(intern) ->   fun identity/1; 
 tuple_to_number_fun(false) ->    fun({_,S}) -> to_number(S) end;
 tuple_to_number_fun(true) ->     fun({_,S}) -> to_float(S) end.
-
-list_to_number(O, S) ->
-  (O#options.list_to_number)(S).
 
 %% Finish maps
 %
@@ -165,34 +129,10 @@ check_labels_fun(true)  -> fun identity/1;
 check_labels_fun(false) -> fun identity/1;
 check_labels_fun(raise) -> fun identity/1.
 
-%% receive values from the Sax driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-receive_map(O, In) -> 
-  case receive_value(O) of
-    'end' -> 
-      (O#options.check_labels)(
-        lists:reverse(In)
-      );
-    Key   -> receive_map(O, [ {Key, receive_value(O)} | In ])
-  end.
-
-receive_array(O, In) ->  
-  case receive_value(O) of
-    'end' -> lists:reverse(In);
-    T     -> receive_array(O, [ T | In ])
-  end.
+%% receive values from the driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 receive_value(O) -> 
   receive
-    { _, { _, [ ?MAP ] } }    -> receive_map(O, []);
-    { _, { _, [ ?ARRAY ] } }  -> receive_array(O, []);
-    { _, { _, [ ?END ] } }    -> 'end';
-
-    { _, { _, [ ?ATOM | DATA ] } }   -> list_to_atom(DATA);
-    { _, { _, [ ?NUMBER | DATA ] } } -> list_to_number(O, DATA);
-    { _, { _, [ ?STRING | DATA ] } } -> list_to_binary(DATA);
-    { _, { _, [ ?KEY | DATA ] } }    -> binary_to_label(O, list_to_binary(DATA));
-
     { _, { _, [ ?EI | DATA ] } }     -> receive_ei_encoded(O, DATA);
 
     UNKNOWN                   -> io:format("UNKNOWN 1 ~p ~n", [UNKNOWN]), UNKNOWN
@@ -200,8 +140,6 @@ receive_value(O) ->
 
 receive_value(object, O)  -> receive_value(O);
 receive_value(value, O)   -> [ Value ] = receive_value(O), Value.
-
-%% receive values from the EI driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 adjust_ei_encoded(O, In) ->
   case In of
@@ -231,16 +169,12 @@ loop(Port) ->
   receive
     {parse, Caller, X, O} ->
       Parse = fetch_option(parse, dict:from_list(O), object),
-      Cmd = case ?DriverMode of
-        ei  -> ?JSON_PARSE_EI;
-        sax -> ?JSON_PARSE
-      end,
       Opt = case Parse of
         object -> 0;
         value  -> ?JSON_PARSE_IN_VALUE
       end,
       
-      Port ! {self(), {command, [ Cmd | [ Opt | X ] ]}},
+      Port ! {self(), {command, [ ?JSON_PARSE_EI | [ Opt | X ] ]}},
       
       Result = receive_value(Parse, build_options(O)),
       Caller ! {result, Result},

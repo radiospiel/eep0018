@@ -29,10 +29,6 @@ static void eep0018_drv_on_input(ErlDrvData session, char *buf, int len)
   flog(stderr, "parsing", 0, buf, len);
   
   switch(cmd) {
-  case EEP0018_JSON_PARSE:
-    json_parse(session, (unsigned char*) buf, len, opts);
-    break;
-
   case EEP0018_JSON_PARSE_EI: 
     json_parse_ei(session, (unsigned char*) buf, len, opts);
     break;

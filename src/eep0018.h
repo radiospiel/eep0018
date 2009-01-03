@@ -3,27 +3,12 @@
 
 /* commands */
 
-#define EEP0018_JSON_PARSE              1
 #define EEP0018_JSON_PARSE_EI           2
 
 /* parameters */
 
 #define EEP0018_JSON_PARSE_IN_VALUE     1               
 #define EEP0018_JSON_PARSE_RAW_NUMBERS  2
-
-/* simple types */
-/* each simple type is followed by the actual data in a string buffer */
-
-#define EEP0018_ATOM     10
-#define EEP0018_NUMBER   11
-#define EEP0018_STRING   12
-#define EEP0018_KEY      13
-
-/* complex types */
-
-#define EEP0018_MAP      14
-#define EEP0018_ARRAY    15
-#define EEP0018_END      16
 
 #define EEP0018_EI       17
 

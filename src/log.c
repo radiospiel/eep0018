@@ -38,15 +38,9 @@ static const char* log_string(unsigned char value) {
   switch(value) {
     case 0: return "";
     
-    test(JSON_PARSE);
+    test(JSON_PARSE_EI);
     
-    test(ATOM);
-    test(NUMBER);
-    test(STRING);
-    test(KEY);
-    test(MAP);
-    test(ARRAY);
-    test(END);
+    test(EI);
   };
 
   sprintf(buf, "0x%02x", value);

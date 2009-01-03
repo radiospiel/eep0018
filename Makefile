@@ -1,29 +1,21 @@
 #
-# Set to the erlang source directory
-OTPROOT=/opt/local/lib/erlang
+# We provide some off-the-mill OS specific Makefile-includes, but you can 
+# still adjust your local settings in Makefile.local.
 
-# gcc flags on Mac OSX
-GCCFLAGS=-fPIC -shared -bundle -flat_namespace -undefined suppress -fno-common
-
-# gcc flags on Linux (untested)
-# GCCFLAGS=-fPIC -shared -fno-common
-
+include Makefile.$(shell uname -s)
+include Makefile.local
 # -----------------------------------------------------------------------------
 # Usually no changes below that line...
 
 # The yajl dir
 YAJLROOT=yajl
 
-# The erlang interface dir
-EIROOT=$(OTPROOT)/lib/erl_interface-3.5.7
-ERTSROOT=$(OTPROOT)/lib/erts-5.6.3
-
 #
 # -----------------------------------------------------------------------------
 ERL_INCLUDES=-I$(OTPROOT)/usr/include/ -I$(EIROOT)/include
 ERL_LIBS=-L$(EIROOT)/lib  -lei -lerl_interface
 
-# enable release mode when activated.
+# release mode enables optimization and disables some logging code.
 RELEASE_FLAGS=-O3 -DNDEBUG
 
 CFLAGS=$(GCCFLAGS) -I include $(ERL_INCLUDES) $(RELEASE_FLAGS) -Wall

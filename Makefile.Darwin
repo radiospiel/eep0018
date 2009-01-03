@@ -1,0 +1,9 @@
+#
+# Set to the erlang source directory
+OTPROOT=/opt/local/lib/erlang
+
+# gcc flags on Mac OSX
+GCCFLAGS=-fPIC -shared -bundle -flat_namespace -undefined suppress -fno-common
+
+# The erlang interface dir
+EIROOT=$(OTPROOT)/lib/erl_interface-3.5.7

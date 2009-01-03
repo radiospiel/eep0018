@@ -1,0 +1,10 @@
+#
+# Set to the erlang source directory
+OTPROOT=/usr/local/lib/erlang
+
+# gcc flags on Linux (untested)
+GCCFLAGS=-fPIC -shared -fno-common
+
+# The erlang interface dir
+EIROOT=$(OTPROOT)/lib/erl_interface-3.5.9
+                                                                                                                              

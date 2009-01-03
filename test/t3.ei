@@ -15,4 +15,5 @@ Parse_file("../test/test-med.json", [{labels,existing_atom}]).
 
 Parse_file("../test/test-med.json", [{labels,atom}]).
 Parse_file("../test/test-big.json", [{labels,atom}]).
+Parse_file("../test/test-big.json", []).
 Parse_file("../test/test-big.json", [{labels,binary},{float,intern}]).

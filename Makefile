@@ -34,7 +34,7 @@ LFLAGS=$(GCCFLAGS) $(ERL_LIBS)
 VPATH=src:$(YAJLROOT)/src
 
 YAJL_OBJECTS=yajl.o yajl_encode.o yajl_lex.o yajl_buf.o yajl_gen.o yajl_parser.o
-EEP_OBJECTS=eep0018.o log.o json_parse_ei.o
+EEP_OBJECTS=eep0018.o log.o json_parse.o
 
 PATHS=bin include include/yajl
 
@@ -79,4 +79,4 @@ $(OUTDIR)/eep0018_drv.so: $(YAJL_OBJECTS) $(EEP_OBJECTS)
 
 eep0018.o: log.h eep0018.h Makefile
 log.o: log.h eep0018.h Makefile
-json_parse_ei.o: log.h eep0018.h Makefile
+json_parse.o: log.h eep0018.h Makefile

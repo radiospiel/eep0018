@@ -24,7 +24,7 @@ ERL_INCLUDES=-I$(OTPROOT)/usr/include/ -I$(EIROOT)/include
 ERL_LIBS=-L$(EIROOT)/lib  -lei -lerl_interface
 
 # enable release mode when activated.
-RELEASE_FLAGS=-O3 -DNDEBUG
+# RELEASE_FLAGS=-O3 -DNDEBUG
 
 CFLAGS=$(GCCFLAGS) -I include $(ERL_INCLUDES) $(RELEASE_FLAGS) -Wall
 LFLAGS=$(GCCFLAGS) $(ERL_LIBS)

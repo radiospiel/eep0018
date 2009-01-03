@@ -1,4 +1,5 @@
 #include "eep0018.h"
+#include "log.h"
 
 /*
  * == OTP driver management ===========================================
@@ -16,15 +17,24 @@ static void eep0018_drv_stop(ErlDrvData handle)
 
 static void eep0018_drv_on_input(ErlDrvData session, char *buf, int len)
 {
-  switch(*buf) {
+  {
+    flog(stderr, "input", 0, buf, len);
+  }
+  
+  char cmd = buf[0];
+  char opts = buf[1];
+  
+  buf += 2; len -= 2;
+
+  flog(stderr, "parsing", 0, buf, len);
+  
+  switch(cmd) {
   case EEP0018_JSON_PARSE:
-  case EEP0018_JSON_PARSE_VALUE:
-    json_parse(session, (unsigned char*) buf+1, len-1, *buf == EEP0018_JSON_PARSE_VALUE);
+    json_parse(session, (unsigned char*) buf, len, opts);
     break;
 
   case EEP0018_JSON_PARSE_EI: 
-  case EEP0018_JSON_PARSE_VALUE_EI:
-    json_parse_ei(session, (unsigned char*) buf+1, len-1, *buf == EEP0018_JSON_PARSE_VALUE_EI);
+    json_parse_ei(session, (unsigned char*) buf, len, opts);
     break;
     
   default:

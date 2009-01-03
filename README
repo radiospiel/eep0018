@@ -34,7 +34,6 @@ Status/TODO
 Please consider this software as a ALPHA release! TODOs:
 
 * Implement all missing json_to_term/2 options
-* Improve implementation of {parse,value}
 * Add native {duplicate_labels,fails} and {duplicate_labels,raise} implementation.
 * Add native {float,true} and {duplicate_labels,raise} implementation.
 

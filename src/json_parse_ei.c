@@ -168,7 +168,9 @@ static yajl_callbacks callbacks_w_numbers = {
   erl_json_ei_end_array
 };
 
-void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int parseInArray) {
+void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts) {
+  int parseInArray = opts & EEP0018_JSON_PARSE_IN_VALUE;
+
   ErlDrvPort port = (ErlDrvPort) session;
 
   /*
@@ -180,7 +182,9 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int pars
 
   /* get a parser handle */
   yajl_parser_config conf = { YAJL_ALLOW_COMMENTS, YAJL_CHECK_UTF8 };
-  yajl_handle handle = yajl_alloc(&callbacks_w_numbers, &conf, &state);
+  yajl_handle handle = yajl_alloc(
+    ((opts & EEP0018_JSON_PARSE_RAW_NUMBERS) ? &callbacks_w_numbers : &callbacks_w_number_tuple), 
+    &conf, &state);
 
   /* start parser */
   yajl_status stat;

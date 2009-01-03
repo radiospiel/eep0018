@@ -55,7 +55,9 @@ static yajl_callbacks erl_json_callbacks = {
   erl_json_end_array
 };
 
-void json_parse(ErlDrvData session, const unsigned char* s, int len, int parseInArray) {
+void json_parse(ErlDrvData session, const unsigned char* s, int len, int opts) {
+  int parseInArray = opts & EEP0018_JSON_PARSE_IN_VALUE;
+  
   ErlDrvPort port = (ErlDrvPort) session;
 
   /* get a parser handle */

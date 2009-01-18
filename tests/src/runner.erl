@@ -9,7 +9,10 @@
   ]
 ).
 
-run(Subdir) ->
+run(A) ->
   eep0018:start("../bin"),
-  lists:foreach(fun(C) -> testcase:run(Subdir, C) end, ?TEST_CONFIGURATIONS),
+  lists:foreach(fun(Subdir) -> do_run(Subdir) end, A),
   init:stop().
+
+do_run(Subdir) -> 
+  lists:foreach(fun(C) -> testcase:run(Subdir, C) end, ?TEST_CONFIGURATIONS).

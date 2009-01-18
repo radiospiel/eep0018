@@ -1,7 +1,6 @@
 #!/bin/bash
 make -C ..
 make -C src
-erl -pa ../bin ./src -eval 'runner:run("testcases").'
-#erl -pa ../bin ./src -eval 'runner:run("yajl").'
+erl -pa ../bin ./src -eval 'runner:run([ "testcases", "yajl" ]).'
 #erl -pa ../bin ./src -eval 'runner:run("incomplete").'
 #erl -pa ../bin ./src -eval 'runner:run("benchmark").'

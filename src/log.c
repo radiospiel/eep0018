@@ -6,7 +6,7 @@
 
 #include <ctype.h>
 
-void fdump(FILE* file, const void *_buf, int len) {
+void do_fdump(FILE* file, const void *_buf, int len) {
   const unsigned char * buf = (const unsigned char *)_buf;
   const int line_len = 16;
   int ofs = 0;
@@ -48,7 +48,7 @@ static const char* log_string(unsigned char value) {
 }
 
 
-void flog(FILE* file, const char* label, int mode, const void *buf, int len) {
+void do_flog(FILE* file, const char* label, int mode, const void *buf, int len) {
   if(mode)
     fprintf(file, "%s *** %s(%d) %d byte *****\n", label, log_string(mode), mode, len);
   else if(buf)
@@ -56,5 +56,5 @@ void flog(FILE* file, const char* label, int mode, const void *buf, int len) {
   else
     fprintf(file, "%s\n", label);
 
-  fdump(file, buf, len);
+  do_fdump(file, buf, len);
 }

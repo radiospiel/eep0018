@@ -7,10 +7,14 @@
 
 #include <stdio.h>
 
+extern void do_fdump(FILE* file, const void *buf, int len);
+extern void do_flog(FILE* file, const char* label, int mode, const void *buf, int len);
+
+
 #ifndef NO_LOG
 
-extern void fdump(FILE* file, const void *buf, int len);
-extern void flog(FILE* file, const char* label, int mode, const void *buf, int len);
+#define fdump do_fdump
+#define flog do_flog
 
 #else
 

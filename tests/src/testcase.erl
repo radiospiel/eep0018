@@ -53,7 +53,7 @@ read_term(File) ->
 % write an erlang term to a file
 write_term(File, Term) ->
   {ok, FileDev} = file:open(File, write),
-  io:fwrite(FileDev, "~w", [ Term ]), %~p", [ Term ]),
+  io:fwrite(FileDev, "~p~n", [ Term ]), %~p", [ Term ]),
   file:close(FileDev).
 
 

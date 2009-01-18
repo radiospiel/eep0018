@@ -1,4 +1,5 @@
 #include "eep0018.h"    
+#include <string.h>
 
 /*
  * 
@@ -107,8 +108,26 @@ static int erl_json_ei_double(void * ctx, double val) {
 static int erl_json_ei_number(void* ctx, const char * val, unsigned int len) {
   State* pState = (State*) ctx;
 
+  /* 
+    While "1e1" is a valid JSON number, it is not a valid parameter to list_to_float/1 
+    We fix that by inserting ".0" before the exponent e. 
+  */
+  const char* exp = memchr(val, 'e', len);
+  if(exp && exp > val) {
+    const char* dot = memchr(val, '.', exp - val);
+    if(!dot) {
+      char* tmp = alloca(len + 5);
+      memcpy(tmp, val, exp - val);
+      memcpy(tmp + (exp - val), ".0", 2);
+      memcpy(tmp + (exp - val) + 2, exp, len - (exp - val));
+      len += 2;
+      val = tmp;
+      tmp[len] = 0;
+    }
+  }
+
   value_list_header(pState);
-  
+
   ei_x_encode_tuple_header(&pState->ei_buf, 2);
   ei_x_encode_atom_len(&pState->ei_buf, "number", 6);
   ei_x_encode_string_len(&pState->ei_buf, val, len);
@@ -239,17 +258,26 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
   stat = yajl_parse(handle, s, len);
   if(parseInArray) stat = yajl_parse(handle, (const unsigned char*) " ]", 2);
 
-  /* if result is not ok: we might raise an error?? */
+  /* 
+   * if result is not ok: we write {error, "reason"} instead. This is 
+   * something that will never be encoded from any JSON data.
+   */
   if (stat != yajl_status_ok)
   {
     unsigned char* msg =  yajl_get_error(handle, 0, s, len); /* non verbose error message */
-    fprintf(stderr, "%s", (const char *) msg);
+    fprintf(stderr, "EEP0018 Error: %s", (const char *) msg);
+
+    ei_x_free(&state.ei_buf);
+    ei_x_new_with_version(&state.ei_buf);
+
+    ei_x_encode_tuple_header(&state.ei_buf, 2);
+    ei_x_encode_atom_len(&state.ei_buf, "error", 5);
+    ei_x_encode_string_len(&state.ei_buf, (const char*) msg, strlen((const char*) msg));
+
     yajl_free_error(msg);
   } 
-  else /* result is ok: send encoded data */
-  {
-    // fwrite(buf, 1, len, stdout);
-  }  
+
+  flog(stderr, "returning", 0, state.ei_buf.buff, state.ei_buf.index);
 
   send_data(port, EEP0018_EI, state.ei_buf.buff, state.ei_buf.index);
   ei_x_free(&state.ei_buf);

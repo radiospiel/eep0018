@@ -41,13 +41,16 @@ read_file(File) ->
   {ok, Json} = file:read_file(File), Json.
 
 % parse an erlang term from a file
+read_term(nil) -> nil;
 read_term(File) ->
   case file:consult(File) of
     {ok, [Term]} -> Term;
     {error, {Line, Mod, Term}} ->
       Msg = apply(Mod, format_error, {Line, Mod, Term}),
       io:format("SYNTAX ERROR: ~p ~n", [ Msg ]);
-    {error, _} -> nil
+    {error, Msg} -> 
+      io:format("IO ERROR: ~p ~n", [ Msg ]),
+      nil
   end.
 
 % write an erlang term to a file
@@ -69,23 +72,39 @@ run_case(Mode, Subdir, Case, Config) ->
 
 % -- run testcase in non-parallel
   
+result_name(pass) -> "pass (unverified)";
+result_name(fail) -> "fail";
+result_name(ok)   -> "ok".
+
 test_case(JsonInput, CaseBase, Config) ->
   delete_results(CaseBase, Config),
   Term = parse_json(JsonInput, Config), 
   Result = check_result(Term, CaseBase, Config), % should be pass, fail, out.
   write_term(result_file(CaseBase, Config, Result), Term),
-  io:format("~p ~p -> ~p ~n", [Config, CaseBase, Result]),
+  io:format("~p ~p -> ~p ~n", [Config, CaseBase, result_name(Result)]),
   Result.
 
 % check the results
+
+gold_name(CaseBase, [eep0018])    -> CaseBase ++ "." ++ "gold.erl";
+gold_name(CaseBase, [eep0018|T])  -> CaseBase ++ "." ++ join(T, "-") ++ ".gold.erl";
+gold_name(CaseBase, X)            -> nil.
+
 check_result(Result, CaseBase, Config) ->
-  Gold = read_term(CaseBase ++ "." ++ Config ++ ".gold.erl"),
-  pass. % compare:equiv(Gold, Result)).
+  GoldName = gold_name(CaseBase, Config),
+  Gold = read_term(GoldName),
+  io:format("\t\t\t\t\t\t~p -> ~p~n", [ GoldName, Gold ]),
+  verify_result(Gold, Result).
+  
+verify_result(nil, Result) -> pass;
+verify_result(Gold, Result) -> ok.
+
+  % pass. % compare:equiv(Gold, Result)).
 
 delete_results(CaseBase, Config) ->
   lists:foreach(fun(R) -> file:delete(result_file(CaseBase, Config, R)) end, [ pass, fail, out ]).
 
-result_file(CaseBase, Config, R) -> CaseBase ++ "." ++ Config ++ "." ++ atom_to_list(R).
+result_file(CaseBase, Config, R) -> CaseBase ++ "." ++ Config ++ "." ++ to_s(R).
 
 % -- run testcase in parallel
 
@@ -112,7 +131,17 @@ wait_for_procs(N) ->
 
 % -- different json parsers -------------------------------------------
 
-parse_json(Input, [ eep0018 | T ])  -> eep0018:json_to_term(Input);
+parse_json(Input, [ eep0018 | _ ])  -> eep0018:json_to_term(Input);
 parse_json(Input, [ mochijson2 ])   -> mochijson2:decode(Input);
 parse_json(Input, [ rabbitmq ])     -> rabbitmq:decode(Input);
-parse_json(Input, X)                -> io:format("Unsupported configuration: ~p ~n", [ X ]).
+parse_json(_, X)                    -> io:format("Unsupported configuration: ~p ~n", [ X ]).
+
+% -- string join
+
+to_s(X) when is_atom(X) -> atom_to_list(X);
+to_s(X) -> X.
+
+% -- not fast, but working :)
+join([], S)     -> "";
+join([H], S)    -> to_s(H);
+join([H|T], S)  -> to_s(H) ++ S ++ join(T, S).

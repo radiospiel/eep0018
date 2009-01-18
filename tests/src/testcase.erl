@@ -8,13 +8,13 @@
 % consists of a JSON input file, and some optional Erlang term
 % gold-files. The file naming scheme is like this:
 %
-%  * <testcase>.json              - a JSON inout file
-%  * <testcase>.<config>.gold.erl - the expected result, when parsing 
-%                                   <testcase>.json with the given 
-%                                   configuration
-%  * <testcase>.<config>.out.erl  - the result of parsing 
-%                                   <testcase>.json with the given 
-%                                   configuration
+%  * <case>.json                  ... a JSON inout file
+%  * <case>.<config>.gold.erl     ... the expected result for parsing 
+%                                     <testcase>.json with in the given
+%                                     configuration
+%  * <case>.<config>.<status>.erl ... the result of parsing <testcase>.json
+%                                     with the given configuration; status 
+%                                     is fail,ok, or pass.
 %
 run(Subdir, Config) ->
   do_run(test, Subdir, Config).
@@ -43,20 +43,18 @@ read_file(File) ->
 % parse an erlang term from a file
 read_term(nil) -> nil;
 read_term(File) ->
+  % io:format("File: ~p ~n", [ File ]),
   case file:consult(File) of
-    {ok, [Term]} -> Term;
-    {error, {Line, Mod, Term}} ->
-      Msg = apply(Mod, format_error, {Line, Mod, Term}),
-      io:format("SYNTAX ERROR: ~p ~n", [ Msg ]);
-    {error, Msg} -> 
-      io:format("IO ERROR: ~p ~n", [ Msg ]),
-      nil
+    {ok, [Term]}        -> Term;
+    {error, enoent}     -> nil;
+    {error, {_,_,Msg}}  -> io:format("~s ~s ~n", [ File, Msg ]), nil;
+    {error, Msg}        -> io:format("~s ~s ~n", [ File, Msg ]), nil
   end.
 
 % write an erlang term to a file
 write_term(File, Term) ->
   {ok, FileDev} = file:open(File, write),
-  io:fwrite(FileDev, "~p~n", [ Term ]), %~p", [ Term ]),
+  io:fwrite(FileDev, "~p.~n", [ Term ]), %~p", [ Term ]),
   file:close(FileDev).
 
 
@@ -79,7 +77,7 @@ result_name(ok)   -> "ok".
 test_case(JsonInput, CaseBase, Config) ->
   delete_results(CaseBase, Config),
   Term = parse_json(JsonInput, Config), 
-  Result = check_result(Term, CaseBase, Config), % should be pass, fail, out.
+  Result = check_result(Term, CaseBase, Config), % should be err, pass, fail, ok.
   write_term(result_file(CaseBase, Config, Result), Term),
   io:format("~p ~p -> ~p ~n", [Config, CaseBase, result_name(Result)]),
   Result.
@@ -88,21 +86,24 @@ test_case(JsonInput, CaseBase, Config) ->
 
 gold_name(CaseBase, [eep0018])    -> CaseBase ++ "." ++ "gold.erl";
 gold_name(CaseBase, [eep0018|T])  -> CaseBase ++ "." ++ join(T, "-") ++ ".gold.erl";
-gold_name(CaseBase, X)            -> nil.
+gold_name(_, _)                   -> nil.
 
 check_result(Result, CaseBase, Config) ->
   GoldName = gold_name(CaseBase, Config),
   Gold = read_term(GoldName),
-  io:format("\t\t\t\t\t\t~p -> ~p~n", [ GoldName, Gold ]),
+  % io:format("\t\t\t\t\t\t~p -> ~p~n", [ GoldName, Gold ]),
   verify_result(Gold, Result).
   
-verify_result(nil, Result) -> pass;
-verify_result(Gold, Result) -> ok.
+verify_result(true) -> ok;
+verify_result(false) -> fail.
+
+verify_result(nil, _) -> pass;
+verify_result(Gold, R) -> verify_result(compare:equiv(Gold, R)).
 
   % pass. % compare:equiv(Gold, Result)).
 
 delete_results(CaseBase, Config) ->
-  lists:foreach(fun(R) -> file:delete(result_file(CaseBase, Config, R)) end, [ pass, fail, out ]).
+  lists:foreach(fun(R) -> file:delete(result_file(CaseBase, Config, R)) end, [ pass, fail, ok ]).
 
 result_file(CaseBase, Config, R) -> CaseBase ++ "." ++ Config ++ "." ++ to_s(R).
 
@@ -142,6 +143,6 @@ to_s(X) when is_atom(X) -> atom_to_list(X);
 to_s(X) -> X.
 
 % -- not fast, but working :)
-join([], S)     -> "";
-join([H], S)    -> to_s(H);
+join([], _)     -> "";
+join([H], _)    -> to_s(H);
 join([H|T], S)  -> to_s(H) ++ S ++ join(T, S).

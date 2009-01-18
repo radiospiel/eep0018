@@ -265,7 +265,6 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
   if (stat != yajl_status_ok)
   {
     unsigned char* msg =  yajl_get_error(handle, 0, s, len); /* non verbose error message */
-    fprintf(stderr, "EEP0018 Error: %s", (const char *) msg);
 
     ei_x_free(&state.ei_buf);
     ei_x_new_with_version(&state.ei_buf);
@@ -276,8 +275,6 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
 
     yajl_free_error(msg);
   } 
-
-  flog(stderr, "returning", 0, state.ei_buf.buff, state.ei_buf.index);
 
   send_data(port, EEP0018_EI, state.ei_buf.buff, state.ei_buf.index);
   ei_x_free(&state.ei_buf);

@@ -4,7 +4,8 @@ BEAM = \
 	mochijson2.beam \
 	mochinum.beam \
 	rabbitmq.beam \
-	runner.beam
+	runner.beam \
+	testcase.beam
 
 .SUFFIXES: .erl .beam
 

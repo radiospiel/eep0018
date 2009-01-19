@@ -162,8 +162,17 @@ static int erl_json_ei_start_map(void* ctx) {
 }
 
 static int erl_json_ei_end_map(void* ctx) {
+  State* pState = (State*) ctx;
+
   flog(stderr, "end map", 0, 0, 0);
-  return erl_json_ei_end_array(ctx);
+  
+  if(pState->skip_value_list_header) {
+    ei_x_encode_tuple_header(&pState->ei_buf, 0);
+    pState->skip_value_list_header = 0;
+  }
+  ei_x_encode_empty_list(&pState->ei_buf);
+
+  return 1;
 }
 
 static int erl_json_ei_map_key(void* ctx, const unsigned char* buf, unsigned int len) {

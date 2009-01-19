@@ -6,6 +6,8 @@
 -export([json_to_term/1, json_to_term/2]).
 -export([term_to_json/1]).
 
+-compile(export_all).
+
 %% constants (see eep0018.h)
 
 -define(JSON_PARSE_EI,        2).
@@ -57,7 +59,7 @@ identity(S) -> S.
   duplicate_labels,
 
   % implementations
-  binary_to_label, number_to_number, tuple_to_number, check_labels
+  binary_to_label, tuple_to_number
 }).
 
 fetch_option(Key, Dict, Default) ->
@@ -80,10 +82,7 @@ build_options(In) ->
 
     binary_to_label   = binary_to_label_fun(Opt_labels),
 
-    number_to_number= number_to_number_fun(Opt_float),
-    tuple_to_number = tuple_to_number_fun(Opt_float),
-    
-    check_labels= check_labels_fun(Opt_duplicate_labels)
+    tuple_to_number = tuple_to_number_fun(Opt_float)
   }.
 
 %% Convert labels
@@ -110,23 +109,9 @@ to_float(S) ->
   catch _:_ -> list_to_float(S)
   end.
 
-number_to_number_fun(intern) ->   fun identity/1; 
-number_to_number_fun(false) ->    fun identity/1;
-number_to_number_fun(true) ->     fun(N) -> 0.0 + N end.
-
 tuple_to_number_fun(intern) ->   fun identity/1; 
 tuple_to_number_fun(false) ->    fun({_,S}) -> to_number(S) end;
 tuple_to_number_fun(true) ->     fun({_,S}) -> to_float(S) end.
-
-%% Finish maps
-%
-% TODO: Add working implementations for check_labels_fun(false), 
-% check_labels_fun(raise).
-%
-
-check_labels_fun(true)  -> fun identity/1;
-check_labels_fun(false) -> fun identity/1;
-check_labels_fun(raise) -> fun identity/1.
 
 %% receive values from the driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -143,14 +128,13 @@ receive_value(value, O)   -> [ Value ] = receive_value(O), Value.
 adjust_ei_encoded(O, In) ->
   case In of
     {number,_}          -> (O#options.tuple_to_number)(In);
-    {K,V}               -> {(O#options.binary_to_label)(K),V};
+    {K,V}               -> {(O#options.binary_to_label)(K),adjust_ei_encoded(O, V)};
     [H|T]               -> lists:map(fun(S) -> adjust_ei_encoded(O, S) end, [H|T]);
-    X when is_number(X) -> (O#options.number_to_number)(O, X);
     X                   -> X
   end.
 
 receive_ei_encoded(O, DATA) ->
-  Raw = erlang:binary_to_term(DATA),
+  Raw = erlang:binary_to_term(DATA), 
 
   %
   % If the caller knows what he does we might not have to adjust 

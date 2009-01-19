@@ -11,12 +11,19 @@
 %
 %  * <case>.json                  ... a JSON inout file
 %  * <case>.<config>.gold.erl     ... the expected result for parsing 
-%                                     <testcase>.json with in the given
+%                                     <case>.json with in the given
 %                                     configuration
-%  * <case>.<config>.<status>.erl ... the result of parsing <testcase>.json
+%  * <case>.<config>.<status>.erl ... the result of parsing <case>.json
 %                                     with the given configuration; status 
 %                                     is fail,ok, or pass.
 %
+% Note: relaxed tests are tests that would fail, if a strict number conversion
+% was requested, (i.e. an integer must be parsed as an integer term, and a
+% float must be parsed as float), but would succeed if the numerical value is identical.
+%
+% As eep0018 always converts numbers to integer/float depending on the input data
+% eep0018 tests should never return 'relaxed'.
+
 run(Subdir, Config) ->
   do_run(test, Subdir, Config).
 

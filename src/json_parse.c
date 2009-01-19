@@ -87,26 +87,10 @@ static int erl_json_ei_boolean(void* ctx, int boolVal) {
   return 1;
 }
 
-static int erl_json_ei_integer(void * ctx, long val) {
-  State* pState = (State*) ctx;
-
-  value_list_header(pState);
-  ei_x_encode_long(&pState->ei_buf, val);
-  
-  return 1;
-}
-
-static int erl_json_ei_double(void * ctx, double val) {
-  State* pState = (State*) ctx;
-
-  value_list_header(pState);
-  ei_x_encode_double(&pState->ei_buf, val);
-
-  return 1;
-}
-
 static int erl_json_ei_number(void* ctx, const char * val, unsigned int len) {
   State* pState = (State*) ctx;
+
+  flog(stderr, "number", 0, val, len);
 
   /* 
     While "1e1" is a valid JSON number, it is not a valid parameter to list_to_float/1 
@@ -202,7 +186,7 @@ static int erl_json_ei_map_key(void* ctx, const unsigned char* buf, unsigned int
  * This setting sends numbers as a {number, <<"String">>} tuple
  * back to erlang. This needs some work on the erlang side.
  */ 
-static yajl_callbacks callbacks_w_number_tuple = {
+static yajl_callbacks callbacks = {
   erl_json_ei_null,
   erl_json_ei_boolean,
   NULL,
@@ -216,41 +200,21 @@ static yajl_callbacks callbacks_w_number_tuple = {
   erl_json_ei_end_array
 };
 
-/*
- * This setting sends numbers as (long) integers or doubles back 
- * to erlang. If a number is outside the valid range parsing fails. 
- */ 
-static yajl_callbacks callbacks_w_numbers = {
-  erl_json_ei_null,
-  erl_json_ei_boolean,
-  erl_json_ei_integer,
-  erl_json_ei_double,
-  NULL, // erl_json_ei_number,
-  erl_json_ei_string,
-  erl_json_ei_start_map,
-  erl_json_ei_map_key,
-  erl_json_ei_end_map,
-  erl_json_ei_start_array,
-  erl_json_ei_end_array
-};
-
 void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts) {
   int parseInArray = opts & EEP0018_JSON_PARSE_IN_VALUE;
-
+  unsigned char* yajl_msg = 0;
+  unsigned char* msg = 0;
   ErlDrvPort port = (ErlDrvPort) session;
 
   /*
-   * initialize state and buffer
+   * initialize yajl parser
    */
   State state;
   ei_x_new_with_version(&state.ei_buf);
   state.skip_value_list_header = -1;
 
-  /* get a parser handle */
   yajl_parser_config conf = { YAJL_ALLOW_COMMENTS, YAJL_CHECK_UTF8 };
-  yajl_handle handle = yajl_alloc(
-    ((opts & EEP0018_JSON_PARSE_RAW_NUMBERS) ? &callbacks_w_numbers : &callbacks_w_number_tuple), 
-    &conf, &state);
+  yajl_handle handle = yajl_alloc(&callbacks, &conf, &state);
 
   /* start parser */
   yajl_status stat;
@@ -258,14 +222,29 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
   stat = yajl_parse(handle, s, len);
   if(parseInArray) stat = yajl_parse(handle, (const unsigned char*) " ]", 2);
 
+  /*
+   * sometimes the parser is still stuck inside a JSON token. This finishs
+   * the token no matter what.
+   */
+  if(stat == yajl_status_insufficient_data)
+    stat = yajl_parse(handle, (const unsigned char*) " ", 1);
+
+  /* 
+   * get an error message on errors
+   */
+  switch(stat) {
+    case yajl_status_ok: break;
+    case yajl_status_insufficient_data: msg = "Insufficient data"; break;
+    default:
+      msg = yajl_msg = yajl_get_error(handle, 0, s, len);
+      break;
+  }
+
   /* 
    * if result is not ok: we write {error, "reason"} instead. This is 
    * something that will never be encoded from any JSON data.
    */
-  if (stat != yajl_status_ok)
-  {
-    unsigned char* msg =  yajl_get_error(handle, 0, s, len); /* non verbose error message */
-
+  if(msg) {
     ei_x_free(&state.ei_buf);
     ei_x_new_with_version(&state.ei_buf);
 
@@ -273,7 +252,7 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
     ei_x_encode_atom_len(&state.ei_buf, "error", 5);
     ei_x_encode_string_len(&state.ei_buf, (const char*) msg, strlen((const char*) msg));
 
-    yajl_free_error(msg);
+    if(yajl_msg) yajl_free_error(yajl_msg);
   } 
 
   send_data(port, EEP0018_EI, state.ei_buf.buff, state.ei_buf.index);

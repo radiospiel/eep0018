@@ -8,7 +8,6 @@
 /* parameters */
 
 #define EEP0018_JSON_PARSE_IN_VALUE     1               
-#define EEP0018_JSON_PARSE_RAW_NUMBERS  2
 
 #define EEP0018_EI       17
 

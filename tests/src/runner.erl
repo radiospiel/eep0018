@@ -1,5 +1,7 @@
 -module(runner).
 -export([run/1]).
+-export([run_case/1]).
+
 
 %
 % which modules to check?
@@ -16,3 +18,9 @@ run(A) ->
 
 do_run(Subdir) -> 
   lists:foreach(fun(C) -> testcase:run(Subdir, C) end, ?TEST_CONFIGURATIONS).
+
+run_case(A) ->
+  eep0018:start("../bin"),
+  lists:foreach(fun(C) -> testcase:run_case(A, C) end, ?TEST_CONFIGURATIONS),
+  init:stop().
+

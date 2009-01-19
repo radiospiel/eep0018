@@ -48,6 +48,68 @@ usage(const char * progname)
     exit(1);
 }
 
+#define flog(stderr, s, A, B, C) fprintf(stderr, "%s\n", s)
+
+
+static int erl_json_ei_null(void* ctx) {
+  flog(stderr, "null", 0, 0, 0);
+  return 1;
+}
+
+static int erl_json_ei_boolean(void* ctx, int boolVal) {
+  flog(stderr, boolVal ? "true" : "false", 0, 0, 0);
+  return 1;
+}
+
+static int erl_json_ei_number(void* ctx, const char * val, unsigned int len) {
+  flog(stderr, "number", 0, val, len);
+  return 1;
+}
+
+static int erl_json_ei_string(void* ctx, const unsigned char* val, unsigned int len) {
+  flog(stderr, "string", 0, (const char*)val, len);
+  return 1;
+}
+
+static int erl_json_ei_start_array(void* ctx) {
+  flog(stderr, "start array", 0, 0, 0);
+  return 1;
+}
+
+static int erl_json_ei_end_array(void* ctx) {
+  flog(stderr, "end array", 0, 0, 0);
+  return 1;
+}
+
+static int erl_json_ei_start_map(void* ctx) {
+  flog(stderr, "start map", 0, 0, 0);
+  return erl_json_ei_start_array(ctx);
+}
+
+static int erl_json_ei_end_map(void* ctx) {
+  flog(stderr, "end map", 0, 0, 0);
+  return erl_json_ei_end_array(ctx);
+}
+
+static int erl_json_ei_map_key(void* ctx, const unsigned char* buf, unsigned int len) {
+  flog(stderr, "map key", 0, buf, len);
+  return 1;
+}
+
+static yajl_callbacks callbacks = {
+  erl_json_ei_null,
+  erl_json_ei_boolean,
+  NULL,
+  NULL,
+  erl_json_ei_number,
+  erl_json_ei_string,
+  erl_json_ei_start_map,
+  erl_json_ei_map_key,
+  erl_json_ei_end_map,
+  erl_json_ei_start_array,
+  erl_json_ei_end_array
+};
+
 int 
 main(int argc, char ** argv)
 {
@@ -80,7 +142,7 @@ main(int argc, char ** argv)
     }
     
     /* allocate a parser */
-    hand = yajl_alloc(NULL, &cfg, NULL);
+    hand = yajl_alloc(&callbacks, &cfg, NULL);
         
     for (;;) {
         rd = fread((void *) fileData, 1, sizeof(fileData) - 1, stdin);

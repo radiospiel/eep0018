@@ -10,7 +10,6 @@
 
 -define(JSON_PARSE_EI,        2).
 -define(JSON_PARSE_IN_VALUE, 1).
--define(JSON_PARSE_RAW_NUMBERS, 2).
 -define(EI,               17).
 
 %% start/stop port

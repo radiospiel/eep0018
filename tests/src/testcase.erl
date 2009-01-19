@@ -1,6 +1,7 @@
 -module(testcase).
 -export([run/2]).
 -export([parallel/2]).
+-export([run_case/2]).
 
 -define(PROCS, 5).
 
@@ -19,6 +20,9 @@
 run(Subdir, Config) ->
   do_run(test, Subdir, Config).
 
+run_case(CaseBase, Config) ->
+  run_case(test, CaseBase, Config).
+  
 parallel(Subdir, Config) ->
   do_run(parallel, Subdir, Config).
 
@@ -31,7 +35,8 @@ do_run(Mode, Subdir, Config) ->
   JsonFiles = [Fname || Fname <- lists:sort(FileNames), lists:suffix(".json", Fname)],
   lists:foreach(fun(Case) -> 
     [ Basename, _ ] = string:tokens(Case, "."),
-    run_case(Mode, Subdir, Basename, Config)
+    CaseBase = Subdir ++ "/" ++ Basename,
+    run_case(Mode, CaseBase, Config)
   end, JsonFiles).
 
 % -- some I/O helpers -------------------------------------------------
@@ -60,8 +65,7 @@ write_term(File, Term) ->
 
 % -- run testcase in a specific config. -------------------------------
 
-run_case(Mode, Subdir, Case, Config) ->
-  CaseBase = Subdir ++ "/" ++ Case,
+run_case(Mode, CaseBase, Config) ->
   JsonInput = read_file(CaseBase ++ ".json"),
   case Mode of
     test      -> test_case(JsonInput, CaseBase, Config);

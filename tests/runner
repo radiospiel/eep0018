@@ -1,6 +1,9 @@
 #!/bin/bash
 make -C ..
 make -C src
-erl -pa ../bin ./src -eval 'runner:run([ "testcases", "yajl" ]).'
+erl -pa ../bin ./src -eval 'runner:run([ "testcases" ]).'
+#erl -pa ../bin ./src -eval 'runner:run_case("testcases/10").'
+
+#erl -pa ../bin ./src -eval 'runner:run([ "testcases", "yajl" ]).'
 #erl -pa ../bin ./src -eval 'runner:parallel([ "testcases", "yajl" ]).'
 #erl -pa ../bin ./src -eval 'runner:benchmark("benchmark").'

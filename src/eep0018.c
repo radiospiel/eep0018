@@ -17,10 +17,6 @@ static void eep0018_drv_stop(ErlDrvData handle)
 
 static void eep0018_drv_on_input(ErlDrvData session, char *buf, int len)
 {
-  {
-    flog(stderr, "input", 0, buf, len);
-  }
-  
   char cmd = buf[0];
   char opts = buf[1];
   

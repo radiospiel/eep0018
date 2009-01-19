@@ -7,8 +7,10 @@
 % which modules to check?
 
 -define(TEST_CONFIGURATIONS, [ 
-  [ eep0018 ]
-  ]
+  [ eep0018 ],
+  [ mochijson2 ],
+  [ rabbitmq ]
+]
 ).
 
 run(A) ->

@@ -76,6 +76,7 @@ run_case(Mode, CaseBase, Config) ->
   
 result_name(pass) -> "pass (unverified)";
 result_name(fail) -> "fail";
+result_name(relaxed) -> "relaxed";
 result_name(ok)   -> "ok".
 
 test_case(JsonInput, CaseBase, Config) ->
@@ -88,7 +89,7 @@ test_case(JsonInput, CaseBase, Config) ->
 
 % check the results
 
-gold_name(CaseBase, [eep0018])    -> CaseBase ++ "." ++ "gold.erl";
+gold_name(CaseBase, [_])          -> CaseBase ++ "." ++ "gold.erl";
 gold_name(CaseBase, [eep0018|T])  -> CaseBase ++ "." ++ join(T, "-") ++ ".gold.erl";
 gold_name(_, _)                   -> nil.
 
@@ -98,11 +99,15 @@ check_result(Result, CaseBase, Config) ->
   % io:format("\t\t\t\t\t\t~p -> ~p~n", [ GoldName, Gold ]),
   verify_result(Gold, Result).
   
-verify_result(true) -> ok;
-verify_result(false) -> fail.
-
 verify_result(nil, _) -> pass;
-verify_result(Gold, R) -> verify_result(compare:equiv(Gold, R)).
+verify_result(Gold, R) -> 
+  case compare:equiv(Gold, R) of
+    true -> ok;
+    false -> case compare:equiv_relaxed(Gold, R) of
+      false -> fail;
+      true  -> relaxed
+    end
+  end.
 
   % pass. % compare:equiv(Gold, Result)).
 

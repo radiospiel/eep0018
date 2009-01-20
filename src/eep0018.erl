@@ -56,7 +56,6 @@ identity(S) -> S.
   % original values
   labels,
   float,
-  duplicate_labels,
 
   % implementations
   binary_to_label, tuple_to_number
@@ -73,15 +72,12 @@ build_options(In) ->
   
   Opt_labels = fetch_option(labels, Dict, binary),
   Opt_float = fetch_option(float, Dict, true),
-  Opt_duplicate_labels = fetch_option(duplicate_labels, Dict, true),
   
   #options{
     labels = Opt_labels,
     float = Opt_float,
-    duplicate_labels = Opt_duplicate_labels,
 
     binary_to_label   = binary_to_label_fun(Opt_labels),
-
     tuple_to_number = tuple_to_number_fun(Opt_float)
   }.
 
@@ -95,7 +91,8 @@ to_atom(V)                  -> to_atom(binary_to_list(V)).
 
 binary_to_label_fun(binary)         -> fun identity/1; 
 binary_to_label_fun(atom)           -> fun to_atom/1;
-binary_to_label_fun(existing_atom)  -> fun to_existing_atom/1.
+binary_to_label_fun(existing_atom)  -> fun to_existing_atom/1;
+binary_to_label_fun(X) -> io:format("Unsupported labels value ~p ~n", [ X ]). 
 
 %% Convert numbers
 
@@ -111,7 +108,8 @@ to_float(S) ->
 
 tuple_to_number_fun(intern) ->   fun identity/1; 
 tuple_to_number_fun(false) ->    fun({_,S}) -> to_number(S) end;
-tuple_to_number_fun(true) ->     fun({_,S}) -> to_float(S) end.
+tuple_to_number_fun(true) ->     fun({_,S}) -> to_float(S) end;
+tuple_to_number_fun(X) -> io:format("Unsupported float value ~p ~n", [ X ]). 
 
 %% receive values from the driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -136,15 +134,19 @@ adjust_ei_encoded(O, In) ->
 receive_ei_encoded(O, DATA) ->
   Raw = erlang:binary_to_term(DATA), 
 
+  case Raw of
+    {error, _} -> throw(badarg);  
+    _ -> ok
+  end,
+
   %
   % If the caller knows what he does we might not have to adjust 
   % the returned data:
+  % - map keys are stored as binaries.
   % - numbers are accepted as {number, String} tuple
-  % - map keys are not to be stored as atoms.
-  % - duplicate map keys are ok.
   %
-  case {O#options.labels, O#options.float, O#options.duplicate_labels} of
-    {binary, intern, true} -> Raw;
+  case {O#options.labels, O#options.float} of
+    {binary, intern} -> Raw;
     _ -> adjust_ei_encoded(O, Raw)
   end.
 

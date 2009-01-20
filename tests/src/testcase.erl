@@ -55,18 +55,18 @@ read_file(File) ->
 % parse an erlang term from a file
 read_term(nil) -> nil;
 read_term(File) ->
-  % io:format("File: ~p ~n", [ File ]),
   case file:consult(File) of
     {ok, [Term]}        -> Term;
     {error, enoent}     -> nil;
-    {error, {_,_,Msg}}  -> io:format("~s ~s ~n", [ File, Msg ]), nil;
-    {error, Msg}        -> io:format("~s ~s ~n", [ File, Msg ]), nil
+    {error, {_,_,Msg}}  -> io:format("~p ~p ~n", [ File, Msg ]), nil;
+    {error, Msg}        -> io:format("~p ~p ~n", [ File, Msg ]), nil
   end.
 
 % write an erlang term to a file
+write_term(nil, Term) -> nil;
 write_term(File, Term) ->
   {ok, FileDev} = file:open(File, write),
-  io:fwrite(FileDev, "~p.~n", [ Term ]), %~p", [ Term ]),
+  io:fwrite(FileDev, "~p.~n", [ Term ]),
   file:close(FileDev).
 
 
@@ -91,14 +91,38 @@ test_case(JsonInput, CaseBase, Config) ->
   Term = parse_json(JsonInput, Config), 
   Result = check_result(Term, CaseBase, Config), % should be err, pass, fail, ok.
   write_term(result_file(CaseBase, Config, Result), Term),
-  io:format("~p ~p -> ~p ~n", [Config, CaseBase, result_name(Result)]),
+  write_term(err_file(CaseBase, Config, Result), Term),
+  io:format("[~s] ~p -> ~p ~n", [config_label(Config), CaseBase, result_name(Result)]),
   Result.
 
-% check the results
+% file names for certain configs and states.
 
-gold_name(CaseBase, [_])          -> CaseBase ++ "." ++ "gold.erl";
-gold_name(CaseBase, [eep0018|T])  -> CaseBase ++ "." ++ join(T, "-") ++ ".gold.erl";
-gold_name(_, _)                   -> nil.
+config_name_({L,true})  -> atom_to_list(L);
+config_name_({L,false}) -> "no" ++ atom_to_list(L);
+config_name_({L,X})     -> atom_to_list(X) ++ atom_to_list(L);
+config_name_([])        -> [];
+config_name_([H|T])     -> [ config_name_(H) | config_name_(T) ]. 
+
+config_name(X) -> join(lists:sort(config_name_(X)), "-").
+
+config_label([eep0018, T]) -> "eep0018-" ++ config_name(T);
+config_label([M])         -> atom_to_list(M).
+
+config_ext([_], "gold")          -> "gold.erl";
+config_ext([eep0018, T], "gold") -> config_name(T) ++ ".gold.erl";
+config_ext(C, Ext)               -> config_label(C) ++ "." ++ Ext.
+
+result_file(CaseBase, Config, R, Subdir) -> 
+  RF = CaseBase ++ "." ++ config_ext(Config, to_s(R)),
+  filename:dirname(RF) ++ Subdir ++ filename:basename(RF).
+
+result_file(CaseBase, Config, R) -> result_file(CaseBase, Config, R, "/results/").
+err_file(CaseBase, Config, fail) -> result_file(CaseBase, Config, fail, "/err/");
+err_file(_, _, _) -> nil.
+  
+gold_name(CaseBase, Config)      -> CaseBase ++ "." ++ config_ext(Config, "gold").
+
+% check the results
 
 check_result(Result, CaseBase, Config) ->
   GoldName = gold_name(CaseBase, Config),
@@ -116,12 +140,9 @@ verify_result(Gold, R) ->
     end
   end.
 
-  % pass. % compare:equiv(Gold, Result)).
-
 delete_results(CaseBase, Config) ->
-  lists:foreach(fun(R) -> file:delete(result_file(CaseBase, Config, R)) end, [ pass, fail, ok ]).
-
-result_file(CaseBase, Config, R) -> CaseBase ++ "." ++ Config ++ "." ++ to_s(R).
+  lists:foreach(fun(R) -> file:delete(result_file(CaseBase, Config, R)) end, [ relaxed, pass, fail, ok ]),
+  file:delete(err_file(CaseBase, Config, fail)).
 
 % -- run testcase in parallel
 

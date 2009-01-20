@@ -38,7 +38,7 @@ equiv_object(M, Props1, Props2) ->
     L1 = lists:keysort(1, Props1),
     L2 = lists:keysort(1, Props2),
     Pairs = lists:zip(L1, L2),
-    true = lists:all(fun({{K1, V1}, {K2, V2}}) ->
+    lists:all(fun({{K1, V1}, {K2, V2}}) ->
                              do_equiv(M, K1, K2) and do_equiv(M, V1, V2)
                      end, Pairs).
 

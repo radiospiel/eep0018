@@ -3,11 +3,19 @@
 
 /* commands */
 
-#define EEP0018_JSON_PARSE_EI           2
+#define EEP0018_PARSE_EI                   2
 
 /* parameters */
 
-#define EEP0018_JSON_PARSE_IN_VALUE     1               
+#define EEP0018_PARSE_VALUE                0x01
+
+#define EEP0018_PARSE_NUMBERS_AS_NUMBER    0x02
+#define EEP0018_PARSE_NUMBERS_AS_FLOAT     0x04
+#define EEP0018_PARSE_NUMBERS_AS_TUPLE     0x08
+
+#define EEP0018_PARSE_NUMBERS_MASK         (EEP0018_PARSE_NUMBERS_AS_NUMBER|\
+                EEP0018_PARSE_NUMBERS_AS_FLOAT|\
+                EEP0018_PARSE_NUMBERS_AS_TUPLE)
 
 #define EEP0018_EI       17
 
@@ -56,6 +64,6 @@ static inline int send_data(void* ctx, char type, const char* data, unsigned int
 }
 
 extern void json_parse(ErlDrvData session, const unsigned char* s, int len, int opts);
-extern void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts);
+extern void json_parse_to_ei(ErlDrvData session, const unsigned char* s, int len, int opts);
 
 #endif

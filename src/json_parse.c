@@ -22,12 +22,36 @@
 
 typedef struct {
   ei_x_buff ei_buf;
+  
+  int options;
+  
   /*
-   * skip_value_list_header might contain the index of the last 
+   * How to encode a list:
+   *
+   * The ei man page states that a list can be encoded as
+   *  list_header(1) Value list_header(1) Value ... list_header(0)
+   * while an empty list would be encoded as 
+   *  list_header(0)
+   *
+   * Now a value may appear only in a list, as the key in an object
+   * or as the value in an object. In both object cases we do have 
+   * complete control about the occurence: after all both key and
+   * value are comprised of exactly one value,
+   *
+   * That gives us the following rules on whether or not to prepend
+   * a value (incl lists and objects) with an ei list header:
+   *
+   *  
+   *
+   * In other words: a value has to be prepended a list_header(1), 
+   * if it appears inside a list. 
+   */
+  /*
+   * skip_list_header_for_value might contain the index of the last 
    * list header. This is used to undo the last list header 
    * for empty lists, and to remember that we are on a list head.
    */
-  int skip_value_list_header;
+  int skip_list_header_for_value;
 } State;
 
 #ifndef NDEBUG
@@ -53,11 +77,11 @@ static int ei_x_encode_tuple_header_log(ei_x_buff* x, int arity) {
 
 #endif
 
-static void inline value_list_header(State* pState) {
-  if(!pState->skip_value_list_header) 
+static void inline list_header_for_value(State* pState) {
+  if(!pState->skip_list_header_for_value) 
     ei_x_encode_list_header(&pState->ei_buf, 1);
   else
-    pState->skip_value_list_header = 0;
+    pState->skip_list_header_for_value = 0;
 }
 
 static int erl_json_ei_null(void* ctx) {
@@ -65,7 +89,7 @@ static int erl_json_ei_null(void* ctx) {
   
   flog(stderr, "null", 0, 0, 0);
   
-  value_list_header(pState);
+  list_header_for_value(pState);
   ei_x_encode_atom_len(&pState->ei_buf, "null", 4);
 
   return 1;
@@ -77,7 +101,7 @@ static int erl_json_ei_boolean(void* ctx, int boolVal) {
 
   flog(stderr, boolVal ? "true" : "false", 0, 0, 0);
   
-  value_list_header(pState);
+  list_header_for_value(pState);
   
   if(boolVal)
     ei_x_encode_atom_len(&pState->ei_buf, "true", 4);
@@ -110,7 +134,7 @@ static int erl_json_ei_number(void* ctx, const char * val, unsigned int len) {
     }
   }
 
-  value_list_header(pState);
+  list_header_for_value(pState);
 
   ei_x_encode_tuple_header(&pState->ei_buf, 2);
   ei_x_encode_atom_len(&pState->ei_buf, "number", 6);
@@ -124,7 +148,7 @@ static int erl_json_ei_string(void* ctx, const unsigned char* val, unsigned int 
 
   flog(stderr, "string", 0, (const char*)val, len);
   
-  value_list_header(pState);
+  list_header_for_value(pState);
   ei_x_encode_binary(&pState->ei_buf, val, len);
   return 1;
 }
@@ -134,9 +158,9 @@ static int erl_json_ei_start_array(void* ctx) {
 
   flog(stderr, "start array", 0, 0, 0);
   
-  value_list_header(pState);
+  list_header_for_value(pState);
   
-  pState->skip_value_list_header = pState->ei_buf.index;
+  pState->skip_list_header_for_value = pState->ei_buf.index;
   ei_x_encode_list_header(&pState->ei_buf, 1);
 
   return 1;
@@ -147,9 +171,9 @@ static int erl_json_ei_end_array(void* ctx) {
 
   flog(stderr, "end array", 0, 0, 0);
   
-  if(pState->skip_value_list_header) {
-    pState->ei_buf.index = pState->skip_value_list_header;
-    pState->skip_value_list_header = 0;
+  if(pState->skip_list_header_for_value) {
+    pState->ei_buf.index = pState->skip_list_header_for_value;
+    pState->skip_list_header_for_value = 0;
   }
   ei_x_encode_empty_list(&pState->ei_buf);
 
@@ -157,7 +181,12 @@ static int erl_json_ei_end_array(void* ctx) {
 }
 
 static int erl_json_ei_start_map(void* ctx) {
+  //State* pState = (State*) ctx;
   flog(stderr, "start map", 0, 0, 0);
+  
+  // list_header_for_value(pState);
+  // ei_x_encode_tuple_header(&pState->ei_buf, 1);
+
   return erl_json_ei_start_array(ctx);
 }
 
@@ -166,9 +195,9 @@ static int erl_json_ei_end_map(void* ctx) {
 
   flog(stderr, "end map", 0, 0, 0);
   
-  if(pState->skip_value_list_header) {
+  if(pState->skip_list_header_for_value) {
     ei_x_encode_tuple_header(&pState->ei_buf, 0);
-    pState->skip_value_list_header = 0;
+    pState->skip_list_header_for_value = 0;
   }
   ei_x_encode_empty_list(&pState->ei_buf);
 
@@ -180,12 +209,12 @@ static int erl_json_ei_map_key(void* ctx, const unsigned char* buf, unsigned int
 
   flog(stderr, "map key", 0, buf, len);
 
-  value_list_header(pState);
+  list_header_for_value(pState);
   
   ei_x_encode_tuple_header(&pState->ei_buf, 2);
   ei_x_encode_binary(&pState->ei_buf, buf, len);
   
-  pState->skip_value_list_header = -1;
+  pState->skip_list_header_for_value = -1;
   
   return 1;
 }
@@ -209,8 +238,9 @@ static yajl_callbacks callbacks = {
   erl_json_ei_end_array
 };
 
-void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts) {
-  int parseInArray = opts & EEP0018_JSON_PARSE_IN_VALUE;
+void json_parse_to_ei(ErlDrvData session, const unsigned char* s, int len, int opts) {
+  int parseValue = opts & EEP0018_PARSE_VALUE;
+  
   unsigned char* yajl_msg = 0;
   unsigned char* msg = 0;
   ErlDrvPort port = (ErlDrvPort) session;
@@ -220,16 +250,17 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
    */
   State state;
   ei_x_new_with_version(&state.ei_buf);
-  state.skip_value_list_header = -1;
+  state.skip_list_header_for_value = -1;
+  state.options = opts;
 
   yajl_parser_config conf = { YAJL_ALLOW_COMMENTS, YAJL_CHECK_UTF8 };
   yajl_handle handle = yajl_alloc(&callbacks, &conf, &state);
 
   /* start parser */
   yajl_status stat;
-  if(parseInArray) stat = yajl_parse(handle, (const unsigned char*) "[ ", 2);
+  if(parseValue) stat = yajl_parse(handle, (const unsigned char*) "[ ", 2);
   stat = yajl_parse(handle, s, len);
-  if(parseInArray) stat = yajl_parse(handle, (const unsigned char*) " ]", 2);
+  if(parseValue) stat = yajl_parse(handle, (const unsigned char*) " ]", 2);
 
   /*
    * sometimes the parser is still stuck inside a JSON token. This finishs
@@ -243,7 +274,9 @@ void json_parse_ei(ErlDrvData session, const unsigned char* s, int len, int opts
    */
   switch(stat) {
     case yajl_status_ok: break;
-    case yajl_status_insufficient_data: msg = "Insufficient data"; break;
+    case yajl_status_insufficient_data: 
+      msg = (unsigned char*)"Insufficient data"; 
+      break;
     default:
       msg = yajl_msg = yajl_get_error(handle, 0, s, len);
       break;

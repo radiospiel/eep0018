@@ -1,5 +1,6 @@
 -module(testcase).
 -export([run/2]).
+-export([benchmark/2]).
 -export([parallel/2]).
 -export([run_case/2]).
 
@@ -29,15 +30,17 @@ run(Subdir, Config) ->
 
 run_case(CaseBase, Config) ->
   run_case(test, CaseBase, Config).
-  
+
 parallel(Subdir, Config) ->
   do_run(parallel, Subdir, Config).
+
+
+benchmark(Subdir, Config) ->
+  do_run(benchmark, Subdir, Config).
 
 % -- main entry -------------------------------------------------------
 
 do_run(Mode, Subdir, Config) ->
-% eep0018:start("../bin"),
-
   {ok, FileNames} = file:list_dir(Subdir),
   JsonFiles = [Fname || Fname <- lists:sort(FileNames), lists:suffix(".json", Fname)],
   lists:foreach(fun(Case) -> 
@@ -76,7 +79,8 @@ run_case(Mode, CaseBase, Config) ->
   JsonInput = read_file(CaseBase ++ ".json"),
   case Mode of
     test      -> test_case(JsonInput, CaseBase, Config);
-    parallel  -> parallel_case(JsonInput, CaseBase, Config)
+    parallel  -> parallel_case(JsonInput, CaseBase, Config);
+    benchmark -> benchmark_case(JsonInput, CaseBase, Config)
   end.
 
 % -- run testcase in non-parallel
@@ -166,6 +170,14 @@ wait_for_procs(0) ->
 wait_for_procs(N) ->
   receive finished -> ok end,
   wait_for_procs(N-1).
+
+
+% -- run testcase for benchmark
+
+benchmark_case(JsonInput, CaseBase, Config) ->
+  Label = "[" ++ config_label(Config) ++ "] " ++ CaseBase,
+  io:format("~s\r", [ Label ]),
+  benchmark:run3(Label, fun() -> parse_json(JsonInput, Config) end).
 
 % -- different json parsers -------------------------------------------
 

@@ -30,27 +30,9 @@ void do_fdump(FILE* file, const void *_buf, int len) {
   }
 }
 
-static const char* log_string(unsigned char value) {
-  #define test(x) case EEP0018_ ## x: return #x
-
-  static char buf[20];
-  
-  switch(value) {
-    case 0: return "";
-    
-    test(JSON_PARSE_EI);
-    
-    test(EI);
-  };
-
-  sprintf(buf, "0x%02x", value);
-  return buf;
-}
-
-
 void do_flog(FILE* file, const char* label, int mode, const void *buf, int len) {
   if(mode)
-    fprintf(file, "%s *** %s(%d) %d byte *****\n", label, log_string(mode), mode, len);
+    fprintf(file, "%s *** 0x%02x: %d byte *****\n", label, mode, len);
   else if(buf)
     fprintf(file, "%s *** %d byte *****\n", label, len);
   else

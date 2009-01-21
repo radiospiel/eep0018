@@ -1,5 +1,6 @@
 -module(benchmark).
 -export([run/1, run/2]).
+-export([timed/1]).
 -export([run3/1, run3/2]).
 
 run(Fun) ->

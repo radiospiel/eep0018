@@ -10,9 +10,15 @@
 
 %% constants (see eep0018.h)
 
--define(JSON_PARSE_EI,        2).
--define(JSON_PARSE_IN_VALUE, 1).
--define(EI,               17).
+-define(PARSE_EI,       2).
+-define(PARSE_VALUE, 1).
+
+-define(PARSE_NUMBERS_AS_NUMBER, 2).
+-define(PARSE_NUMBERS_AS_FLOAT, 4).
+-define(PARSE_NUMBERS_AS_TUPLE, 8).
+
+-define(EI,                 17).
+
 
 %% start/stop port
 
@@ -58,7 +64,7 @@ identity(S) -> S.
   float,
 
   % implementations
-  binary_to_label, tuple_to_number
+  binary_to_label, list_to_number
 }).
 
 fetch_option(Key, Dict, Default) ->
@@ -71,14 +77,14 @@ build_options(In) ->
   Dict = dict:from_list(In),
   
   Opt_labels = fetch_option(labels, Dict, binary),
-  Opt_float = fetch_option(float, Dict, true),
+  Opt_float = fetch_option(number, Dict, exact),
   
   #options{
     labels = Opt_labels,
     float = Opt_float,
 
-    binary_to_label   = binary_to_label_fun(Opt_labels),
-    tuple_to_number = tuple_to_number_fun(Opt_float)
+    binary_to_label = binary_to_label_fun(Opt_labels),
+    list_to_number = list_to_number_fun(Opt_float)
   }.
 
 %% Convert labels
@@ -106,10 +112,10 @@ to_float(S) ->
   catch _:_ -> list_to_float(S)
   end.
 
-tuple_to_number_fun(intern) ->   fun identity/1; 
-tuple_to_number_fun(false) ->    fun({_,S}) -> to_number(S) end;
-tuple_to_number_fun(true) ->     fun({_,S}) -> to_float(S) end;
-tuple_to_number_fun(X) -> io:format("Unsupported float value ~p ~n", [ X ]). 
+list_to_number_fun(exact) ->  fun to_number/1;
+list_to_number_fun(float) ->  fun to_float/1;
+
+list_to_number_fun(X) -> io:format("Unsupported number parameter ~p ~n", [ X ]). 
 
 %% receive values from the driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -123,13 +129,42 @@ receive_value(O) ->
 receive_value(object, O)  -> receive_value(O);
 receive_value(value, O)   -> [ Value ] = receive_value(O), Value.
 
-adjust_ei_encoded(O, In) ->
+% for testing
+%adjust(O, In) ->
+%  adjust(build_options(O), In).
+
+%  eep0018:adjust([], [{number,"-123"},<<"foo">>|{}]),
+
+adjust_object_entries(O, {}) -> [];              %compat
+adjust_object_entries(O, {K,V}) ->               %compat
+  {(O#options.binary_to_label)(K),adjust(O, V)}.
+
+adjust_compat(O, In) ->
   case In of
-    {number,_}          -> (O#options.tuple_to_number)(In);
-    {K,V}               -> {(O#options.binary_to_label)(K),adjust_ei_encoded(O, V)};
-    [H|T]               -> lists:map(fun(S) -> adjust_ei_encoded(O, S) end, [H|T]);
+    {number,N}          -> (O#options.list_to_number)(N);
+    {K,V}               -> {(O#options.binary_to_label)(K),adjust(O, V)};
+
+    [{}]                -> {[]};                                  % compat
+
+    [{number,V}|T]     ->                                         % compat
+      lists:map(fun(S) -> adjust(O, S) end, In);
+
+    [{K,V}|T]           ->                                        % compat
+      { lists:map(fun(S) -> adjust_object_entries(O, S) end, In) };
+      
+    [H|T]               -> lists:map(fun(S) -> adjust(O, S) end, In);
     X                   -> X
   end.
+
+adjust_new(O, In) ->
+  case In of
+    {number,N}          -> (O#options.list_to_number)(N);
+    {K,V}               -> {(O#options.binary_to_label)(K),adjust(O, V)};
+    [H|T]               -> lists:map(fun(S) -> adjust(O, S) end, In);
+    X                   -> X
+  end.
+
+adjust(O, In) -> adjust_compat(O, In).
 
 receive_ei_encoded(O, DATA) ->
   Raw = erlang:binary_to_term(DATA), 
@@ -147,7 +182,7 @@ receive_ei_encoded(O, DATA) ->
   %
   case {O#options.labels, O#options.float} of
     {binary, intern} -> Raw;
-    _ -> adjust_ei_encoded(O, Raw)
+    _ -> adjust(O, Raw)
   end.
 
 loop(Port) ->
@@ -156,10 +191,10 @@ loop(Port) ->
       Parse = fetch_option(parse, dict:from_list(O), object),
       Opt = case Parse of
         object -> 0;
-        value  -> ?JSON_PARSE_IN_VALUE
+        value  -> ?PARSE_VALUE
       end,
       
-      Port ! {self(), {command, [ ?JSON_PARSE_EI | [ Opt | X ] ]}},
+      Port ! {self(), {command, [ ?PARSE_EI | [ Opt | X ] ]}},
       
       Result = receive_value(Parse, build_options(O)),
       Caller ! {result, Result},

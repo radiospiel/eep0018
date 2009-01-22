@@ -22,7 +22,7 @@ static void eep0018_drv_on_input(ErlDrvData session, char *buf, int len)
   
   buf += 2; len -= 2;
 
-  flog(stderr, "parsing", 0, buf, len);
+  flog(stderr, "parsing/w opts", opts, buf, len);
   
   switch(cmd) {
   case EEP0018_PARSE_EI: 

@@ -181,7 +181,8 @@ benchmark_case(JsonInput, CaseBase, Config) ->
 
 % -- different json parsers -------------------------------------------
 
-parse_json(Input, [ eep0018 | _ ])  -> eep0018:json_to_term(Input);
+parse_json(Input, [ eep0018, Config ]) -> eep0018:json_to_term(Input, Config);
+parse_json(Input, [ eep0018 ])      -> eep0018:json_to_term(Input);
 parse_json(Input, [ mochijson2 ])   -> mochijson2:decode(Input);
 parse_json(Input, [ rabbitmq ])     -> rabbitmq:decode(Input);
 parse_json(_, X)                    -> io:format("Unsupported configuration: ~p ~n", [ X ]).

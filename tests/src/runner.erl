@@ -8,15 +8,15 @@
 % which modules to check?
 
 -define(TEST_CONFIGURATIONS, [ 
-  [ eep0018 ],
-%  [ eep0018, [{float, false}, {labels, atom}] ],
-%  [ eep0018, [{float, true}, {labels, binary}] ],
-%%  [ eep0018, [{float, false}, {labels, atom}] ],
-%  [ eep0018, [{float, false}, {labels, binary}] ],
-%  [ eep0018, [{float, intern}, {labels, atom}] ],
-%  [ eep0018, [{float, intern}, {labels, binary}] ],
-  [ mochijson2 ],
-  [ rabbitmq ]
+  [ eep0018 ] 
+% ,[ eep0018, [{float, false}, {labels, atom}] ]
+% ,[ eep0018, [{float, true}, {labels, binary}] ]
+% ,[ eep0018, [{float, false}, {labels, atom}] ]
+% ,[ eep0018, [{float, false}, {labels, binary}] ]
+% ,[ eep0018, [{float, intern}, {labels, atom}] ]
+% ,[ eep0018, [{float, intern}, {labels, binary}] ]
+% ,[ mochijson2 ]
+% ,[ rabbitmq ]
 ]
 ).
 

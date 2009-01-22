@@ -34,65 +34,91 @@ Status/TODO
 Please consider this software as a ALPHA release! TODOs:
 
 * Implement all missing json_to_term/2 options
-* Add native {duplicate_labels,fails} and {duplicate_labels,raise} implementation.
-* Add native {float,true} and {duplicate_labels,raise} implementation.
 
-json_to_term/2 Options
-======================
+json_to_term/2 Options - Differences to EEP 18
+==============================================
 
-(*) .. default
+EEP0018 states
 
-{float,false(*)|true|intern}
+|       The {float,true} option says to convert all JSON numbers to
+|       Erlang floats, even if they look like integers.
+|       With this option, the result has type json(L, float()).
+|       
+|       The {float,false} option says to convert integers to integers;
+|       it is the default.
+|       With this option, the result has type json(L, number()).
+|       
+|       The {label,binary} option says to convert all JSON strings
+|       to Erlang binaries, even if they are keys in key:value pairs.
+|       With this option, the result has type json(binary(), N).
+|       This is the default.
+|       
+|       The {label,atom} option says to convert keys to atoms if
+|       possible, leaving other strings as binaries.
+|       With this option, the result has type json(json_label(), N).
+|       
+|       The {label,existing_atom} option says to convert keys to
+|       atoms if the atoms already exist, leaving other keys as
+|       binaries.  All other strings remain binaries too.
+|       With this option, the result has type json(json_label(), N).
 
-	true: return all numbers as floats.
-	false: return integers as integers, and floats as floats.
-	intern: return numbers as {number:"string"} tuples. (not yet implemented)
+Instead of that we implement the following options
 
-{label,binary(*)|atom|existing_atom}
+{parse,object}(*) ...... Parse only Erlang objects and arrays, i.e. parsing "123" would fail.
+{parse,value}            Parse all Erlang values, i.e. parsing "123" would succeed.
 
-	The "label" option defines whether or not map keys in the returned terms
-	are converted into an atom.
-	
-	binary: return map keys as binary
-	atom: return map keys as an atom, if possible, as a binary otherwise.
-	existing_atom: return map keys as an atom, if existing, as a binary otherwise.
+{objects,eep0018} ... (*) JSON objects will be mapped as laid out in EEP0018, i.e.
+                            {} -> [{}]
+                            {"a":"b","c":"d"} -> [{<<"a">>,<<"b">>},{<<"c">>,<<"d">>}]
+{objects,compat}          JSON objects will be mapped as in some other implementations, i.e. 
+                            {} -> {[]}
+                            {"a":"b","c":"d"} -> {[{<<"a">>,<<"b">>},{<<"c">>,<<"d">>}]}
 
-	Note: the "existing_atom" option slows down things terribly, if the atoms don't exist.
+{labels,binary} ... (*) Labels will be mapped as binaries, i.e.
+                          {"a":"b","c":"d"} -> {[{<<"a">>,<<"b">>},{<<"c">>,<<"d">>}]}
+{labels,atom}           Labels will be mapped as binaries, i.e.
+                          {"a":"b","c":"d"} -> {[{a,<<"b">>},{c,<<"d">>}]}
+                        Use this option only if you know that there is a limited range of
+                        possible labels and that these labels can be converted to atoms.
 
-{duplicate_labels,true(*)|false|raise}
+                        The {labels,existing_atom} option is not implemented, because 
+                          a) it runs quite slow, and
+                          b) the result of such an operation is unpredictable.
 
-	true: don't fix maps with duplicate entries
-	false: remove duplicate entries from maps (not yet implemented)
-	raise: raise an error on duplicate map entries (not yet implemented)
+{number,exact} ... (*) Numbers are parsed exactly as they are in the JSON source code, i.e.
+                       a JSON integer will be mapped as an Erlang integer, and a JSON float
+                       will be mapped as an Erlang float, in the precision supported by the
+                       current OTP runtime.
+{number,number}        Numbers are parsed exactly as they are in the JSON source code, i.e.
+                       a JSON integer will be mapped as an Erlang integer, and a JSON float
+                       will be mapped as an Erlang float, in the precision supported by the
+                       C runtime and ei libraries, eg. signed 32-bit for integers and 64 bit 
+                       floating points.
+{number,float}         All numbers are parsed as an Erlang float, in the precision supported
+                       by the C runtime (eg. 64 bit).
 
-{parse,value|object}
+Performance considerations
+==========================
 
-	value: parse JSON values (i.e. "1")
-	object: parse JSON objects. JSON values that are not objects raise an exception.
+Some of these options have a huge performance impact, as they are implemented on the Erlang side
+and so require a two-step parsing process (one round in the driver and one extra round in Erlang):
 
-Note: The parameter set heavily influences the performance of the parser. The fastest
-settings are:
- 
-	[{float,intern},{label,binary},{duplicate_labels,true},{parse,object}]
+ * {number,exact} is implemented by transmitting the number value as a string
+ * {objects,compat} is currently implemented in Erlang. A final implementation -
+   after everyone agreed upon the Erlang mapping of JSON objects, would of
+   course be done in C. 
 
 YAJL
 ====
 
 The parsing engine that drives behind that module is YAJL, see http://lloydforge.org/projects/yajl/.
 The source tree contains a copy of that library, currently at version 0.4.0.
- 
-Differences to EEP 18
-=======================
-
-EEP 18's json_to_term function defines parsing of JSON objects. As CouchDB
-needs a JSON parser that is able to parse JSON values this implementation adds
-this functionality.
 
 Implemenation Status
 ====================
 
-The current development is done on OS/X 10.5. Other OSes might need a tuned
-Makefile.
+The current development is done on OS/X 10.5, and is usually checked on Ubuntu/32 bit. 
+Other OSes might need a tuned Makefile.{uname -s}.
 
 Critical Discussion
 ===================

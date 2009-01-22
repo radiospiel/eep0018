@@ -1,5 +1,6 @@
 #include "eep0018.h"    
 #include <string.h>
+#include <stdlib.h>
 
 /*
  * 
@@ -53,6 +54,14 @@ typedef struct {
    */
   int skip_list_header_for_value;
 } State;
+
+static inline int numbers_as(State* p) {
+  return (p->options & EEP0018_PARSE_NUMBERS_MASK);
+}
+
+static inline int keys_as(State* p) {
+  return (p->options & EEP0018_PARSE_KEYS_MASK);
+}
 
 #ifndef NDEBUG
 
@@ -116,29 +125,50 @@ static int erl_json_ei_number(void* ctx, const char * val, unsigned int len) {
 
   flog(stderr, "number", 0, val, len);
 
-  /* 
-    While "1e1" is a valid JSON number, it is not a valid parameter to list_to_float/1 
-    We fix that by inserting ".0" before the exponent e. 
-  */
-  const char* exp = memchr(val, 'e', len);
-  if(exp && exp > val) {
-    const char* dot = memchr(val, '.', exp - val);
-    if(!dot) {
-      char* tmp = alloca(len + 5);
-      memcpy(tmp, val, exp - val);
-      memcpy(tmp + (exp - val), ".0", 2);
-      memcpy(tmp + (exp - val) + 2, exp, len - (exp - val));
-      len += 2;
-      val = tmp;
-      tmp[len] = 0;
+  list_header_for_value(pState);
+
+  switch(numbers_as(pState)) {
+    case EEP0018_PARSE_NUMBERS_AS_NUMBER:
+    {
+      if(memchr(val, '.', len) || memchr(val, 'e', len) || memchr(val, 'E', len))
+        ei_x_encode_double(&pState->ei_buf, strtod(val, 0));
+      else
+        ei_x_encode_long(&pState->ei_buf, strtol(val, 0, 10));
+      break;
+    }
+    case EEP0018_PARSE_NUMBERS_AS_FLOAT:
+    {
+      ei_x_encode_double(&pState->ei_buf, strtod(val, 0));
+      break;
+    }
+    case EEP0018_PARSE_NUMBERS_AS_TUPLE:
+    {
+      /* 
+        While "1e1" is a valid JSON number, it is not a valid parameter to list_to_float/1 
+        We fix that by inserting ".0" before the exponent e. 
+      */
+      const char* exp = memchr(val, 'e', len);
+      if(exp && exp > val) {
+        const char* dot = memchr(val, '.', exp - val);
+        if(!dot) {
+          char* tmp = alloca(len + 5);
+          memcpy(tmp, val, exp - val);
+          memcpy(tmp + (exp - val), ".0", 2);
+          memcpy(tmp + (exp - val) + 2, exp, len - (exp - val));
+          len += 2;
+          val = tmp;
+          tmp[len] = 0;
+        }
+      }
+
+      ei_x_encode_tuple_header(&pState->ei_buf, 3);
+      ei_x_encode_atom_len(&pState->ei_buf, "number", 6);
+      ei_x_encode_string_len(&pState->ei_buf, val, len);
+      ei_x_encode_atom_len(&pState->ei_buf, "a", 1);      // a dummy
+      break;
     }
   }
 
-  list_header_for_value(pState);
-
-  ei_x_encode_tuple_header(&pState->ei_buf, 2);
-  ei_x_encode_atom_len(&pState->ei_buf, "number", 6);
-  ei_x_encode_string_len(&pState->ei_buf, val, len);
   
   return 1;
 }
@@ -212,8 +242,16 @@ static int erl_json_ei_map_key(void* ctx, const unsigned char* buf, unsigned int
   list_header_for_value(pState);
   
   ei_x_encode_tuple_header(&pState->ei_buf, 2);
-  ei_x_encode_binary(&pState->ei_buf, buf, len);
-  
+
+  switch(keys_as(pState)) {
+    case EEP0018_PARSE_KEYS_AS_ATOM:
+      ei_x_encode_atom_len(&pState->ei_buf, buf, len);
+      break;
+    case EEP0018_PARSE_KEYS_AS_BINARY:
+      ei_x_encode_binary(&pState->ei_buf, buf, len);
+      break;
+  }
+
   pState->skip_list_header_for_value = -1;
   
   return 1;

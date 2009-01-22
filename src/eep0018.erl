@@ -15,7 +15,10 @@
 
 -define(PARSE_NUMBERS_AS_NUMBER, 2).
 -define(PARSE_NUMBERS_AS_FLOAT, 4).
--define(PARSE_NUMBERS_AS_TUPLE, 8).
+-define(PARSE_NUMBERS_AS_TUPLE, 0).
+
+-define(PARSE_KEYS_AS_ATOM, 8).
+-define(PARSE_KEYS_AS_BINARY, 0).
 
 -define(EI,                 17).
 
@@ -60,11 +63,16 @@ identity(S) -> S.
 
 -record(options, {
   % original values
+  parse,
+  objects,
   labels,
-  float,
+  number,
+
+  % Options for driver
+  options, 
 
   % implementations
-  binary_to_label, list_to_number
+  list_to_number
 }).
 
 fetch_option(Key, Dict, Default) ->
@@ -75,30 +83,42 @@ fetch_option(Key, Dict, Default) ->
 
 build_options(In) ->
   Dict = dict:from_list(In),
-  
-  Opt_labels = fetch_option(labels, Dict, binary),
-  Opt_float = fetch_option(number, Dict, exact),
+
+  Opt_number = fetch_option(number, Dict, exact),
   
   #options{
-    labels = Opt_labels,
-    float = Opt_float,
-
-    binary_to_label = binary_to_label_fun(Opt_labels),
-    list_to_number = list_to_number_fun(Opt_float)
+    parse   = fetch_option(parse, Dict, object),      % object or value
+    objects = fetch_option(objects, Dict, eep0018),   % compat or eep0018
+    labels  = fetch_option(labels, Dict, binary),     % binary or atom
+    number  = Opt_number,                             % exact, number, float
+    
+    list_to_number = list_to_number_fun(Opt_number)
   }.
 
-%% Convert labels
+nop_options(O) -> O#options.number /= exact. 
 
-to_existing_atom(V) when is_list(V) -> try list_to_existing_atom(V) catch _:_ -> V end;
-to_existing_atom(V)                 -> to_existing_atom(binary_to_list(V)).
+%% Options for the driver
 
-to_atom(V) when is_list(V)  -> try list_to_atom(V) catch _:_ -> V end;
-to_atom(V)                  -> to_atom(binary_to_list(V)).
+driver_option(parse, object)    -> 0;
+driver_option(parse, value)     -> ?PARSE_VALUE;
 
-binary_to_label_fun(binary)         -> fun identity/1; 
-binary_to_label_fun(atom)           -> fun to_atom/1;
-binary_to_label_fun(existing_atom)  -> fun to_existing_atom/1;
-binary_to_label_fun(X) -> io:format("Unsupported labels value ~p ~n", [ X ]). 
+driver_option(objects, compat)  -> 0;
+driver_option(objects, eep0018) -> 0;
+
+driver_option(number, exact)    -> ?PARSE_NUMBERS_AS_TUPLE;
+driver_option(number, number)   -> ?PARSE_NUMBERS_AS_NUMBER;
+driver_option(number, float)    -> ?PARSE_NUMBERS_AS_FLOAT;
+
+driver_option(labels, binary)   -> ?PARSE_KEYS_AS_BINARY;
+driver_option(labels, atom)     -> ?PARSE_KEYS_AS_ATOM;
+
+driver_option(L, I) -> io:format("Unsupported option ~p ~p ~n", [L,I]), 0.
+
+driver_option(O) ->
+  driver_option(parse, O#options.parse) +
+  driver_option(objects, O#options.objects) +
+  driver_option(labels, O#options.labels) +
+  driver_option(number, O#options.number).
 
 %% Convert numbers
 
@@ -107,96 +127,77 @@ to_number(S) ->
   catch _:_ -> list_to_float(S)
   end.
 
-to_float(S) ->  
-  try list_to_integer(S) + 0.0 
-  catch _:_ -> list_to_float(S)
-  end.
-
-list_to_number_fun(exact) ->  fun to_number/1;
-list_to_number_fun(float) ->  fun to_float/1;
-
-list_to_number_fun(X) -> io:format("Unsupported number parameter ~p ~n", [ X ]). 
+list_to_number_fun(exact)   ->  fun to_number/1;
+list_to_number_fun(float)   ->  fun identity/1;
+list_to_number_fun(number)  ->  fun identity/1.
 
 %% receive values from the driver %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-receive_value(O) -> 
+receive_value(InternOption) -> 
   receive
-    { _, { _, [ ?EI | DATA ] } }     -> receive_ei_encoded(O, DATA);
+    { _, { _, [ ?EI | DATA ] } } -> 
 
-    UNKNOWN                   -> io:format("UNKNOWN 1 ~p ~n", [UNKNOWN]), UNKNOWN
+      Adjusted = case erlang:binary_to_term(DATA) of
+        {error, _} -> throw(badarg);  
+        R          -> adjust(InternOption, R, InternOption#options.objects)
+      end,
+
+      case InternOption#options.parse of
+        object -> Adjusted;
+        value  -> [ VALUE ] = Adjusted, VALUE
+      end;
+    UNKNOWN -> io:format("UNKNOWN 1 ~p ~n", [UNKNOWN]), UNKNOWN
   end.
 
-receive_value(object, O)  -> receive_value(O);
-receive_value(value, O)   -> [ Value ] = receive_value(O), Value.
+%% adjust returned term %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% The return values from the driver might need some adjustment.
+%
+% - Numbers might be encoded as {number, <<"123">>, d}
+% - In compat settings objects must be rebuild.
 
-% for testing
-%adjust(O, In) ->
-%  adjust(build_options(O), In).
-
-%  eep0018:adjust([], [{number,"-123"},<<"foo">>|{}]),
-
-adjust_object_entries(O, {}) -> [];              %compat
-adjust_object_entries(O, {K,V}) ->               %compat
-  {(O#options.binary_to_label)(K),adjust(O, V)}.
+adjust_compat_object(_, {}) -> [];
+adjust_compat_object(O, {K,V}) -> {K, adjust_compat(O, V)}.
 
 adjust_compat(O, In) ->
   case In of
-    {number,N}          -> (O#options.list_to_number)(N);
-    {K,V}               -> {(O#options.binary_to_label)(K),adjust(O, V)};
+    {number,N,_}     -> (O#options.list_to_number)(N);
+    {K,V}            -> {K,adjust_compat(O, V)};
 
-    [{}]                -> {[]};                                  % compat
-
-    [{number,V}|T]     ->                                         % compat
-      lists:map(fun(S) -> adjust(O, S) end, In);
-
-    [{K,V}|T]           ->                                        % compat
-      { lists:map(fun(S) -> adjust_object_entries(O, S) end, In) };
+    [{}]             -> {[]};
+    [{number,_,_}|_] -> lists:map(fun(S) -> adjust_compat(O, S) end, In);             % This is a list starting with a number 
+    [{_,_}|_]        -> { lists:map(fun(S) -> adjust_compat_object(O, S) end, In) };  % This is a list of {K,V} pairs 
       
-    [H|T]               -> lists:map(fun(S) -> adjust(O, S) end, In);
-    X                   -> X
+    [_|_]            -> lists:map(fun(S) -> adjust_compat(O, S) end, In);
+    X                -> X
   end.
 
-adjust_new(O, In) ->
+adjust_eep0018(O, In) ->
   case In of
-    {number,N}          -> (O#options.list_to_number)(N);
-    {K,V}               -> {(O#options.binary_to_label)(K),adjust(O, V)};
-    [H|T]               -> lists:map(fun(S) -> adjust(O, S) end, In);
-    X                   -> X
+    {number,N,_}   -> (O#options.list_to_number)(N);
+    {K,V}          -> {K,adjust_eep0018(O, V)};
+    [_|_]          -> lists:map(fun(S) -> adjust_eep0018(O, S) end, In);
+    X              -> X
   end.
 
-adjust(O, In) -> adjust_compat(O, In).
+% adjust(O, In) -> adjust_compat(O, In).
 
-receive_ei_encoded(O, DATA) ->
-  Raw = erlang:binary_to_term(DATA), 
+adjust(O, In, compat)  -> adjust_compat(O, In);
+adjust(O, In, eep0018) -> adjust(O, In, nop_options(O));
+adjust(_, In, true)    -> In;
+adjust(O, In, _)       -> adjust_eep0018(O, In).
 
-  case Raw of
-    {error, _} -> throw(badarg);  
-    _ -> ok
-  end,
-
-  %
-  % If the caller knows what he does we might not have to adjust 
-  % the returned data:
-  % - map keys are stored as binaries.
-  % - numbers are accepted as {number, String} tuple
-  %
-  case {O#options.labels, O#options.float} of
-    {binary, intern} -> Raw;
-    _ -> adjust(O, Raw)
-  end.
+% 
 
 loop(Port) ->
   receive
     {parse, Caller, X, O} ->
-      Parse = fetch_option(parse, dict:from_list(O), object),
-      Opt = case Parse of
-        object -> 0;
-        value  -> ?PARSE_VALUE
-      end,
+      InternOptions = build_options(O),
+      DriverOpts = driver_option(InternOptions),
       
-      Port ! {self(), {command, [ ?PARSE_EI | [ Opt | X ] ]}},
+      Port ! {self(), {command, [ ?PARSE_EI | [ DriverOpts | X ] ]}},
       
-      Result = receive_value(Parse, build_options(O)),
+      Result = receive_value(InternOptions),
       Caller ! {result, Result},
       loop(Port);
 

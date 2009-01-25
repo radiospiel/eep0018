@@ -291,7 +291,7 @@ void json_parse_to_ei(ErlDrvData session, const unsigned char* s, int len, int o
   state.skip_list_header_for_value = -1;
   state.options = opts;
 
-  yajl_parser_config conf = { YAJL_ALLOW_COMMENTS, YAJL_CHECK_UTF8 };
+  yajl_parser_config conf = { YAJL_ALLOW_COMMENTS }; // , YAJL_CHECK_UTF8 };
   yajl_handle handle = yajl_alloc(&callbacks, &conf, &state);
 
   /* start parser */

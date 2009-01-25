@@ -136,17 +136,10 @@ list_to_number_fun(number)  ->  fun identity/1.
 receive_value(InternOption) -> 
   receive
     { _, { _, [ ?EI | DATA ] } } -> 
-
-      Adjusted = case erlang:binary_to_term(DATA) of
-        {error, _} -> throw(badarg);  
-        R          -> adjust(InternOption, R, InternOption#options.objects)
-      end,
-
-      case InternOption#options.parse of
-        object -> Adjusted;
-        value  -> [ VALUE ] = Adjusted, VALUE
+      case erlang:binary_to_term(DATA) of
+        {error, M} -> {error, M};
+        R          -> adjust(InternOption, R)
       end
-    % UNKNOWN -> io:format("UNKNOWN 1 ~p ~n", [UNKNOWN]), UNKNOWN
   end.
 
 %% adjust returned term %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -186,6 +179,12 @@ adjust(O, In, compat)  -> adjust_compat(O, In);
 adjust(O, In, eep0018) -> adjust(O, In, nop_options(O));
 adjust(_, In, true)    -> In;
 adjust(O, In, _)       -> adjust_eep0018(O, In).
+
+adjust(O, In) -> 
+  case O#options.parse of
+    object -> In;
+    value  -> [ VALUE ] = In, VALUE
+  end.
 
 % 
 

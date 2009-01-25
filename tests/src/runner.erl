@@ -1,5 +1,6 @@
 -module(runner).
 -export([run/1]).
+-export([run_case/1]).
 -export([parallel/1]).
 -export([benchmark/1]).
 
@@ -16,14 +17,19 @@
 % ,[ eep0018, [{float, false}, {labels, binary}] ]
 % ,[ eep0018, [{float, intern}, {labels, atom}] ]
 % ,[ eep0018, [{float, intern}, {labels, binary}] ]
-% ,[ mochijson2 ]
-% ,[ rabbitmq ]
+ ,[ mochijson2 ]
+ ,[ rabbitmq ]
 ]
 ).
 
 run(A) ->
   eep0018:start("../bin"),
   lists:foreach(fun(Subdir) -> do_run(Subdir) end, A),
+  init:stop().
+
+run_case(X) ->
+  eep0018:start("../bin"),
+  lists:foreach(fun(C) -> testcase:run_case(X,C) end, ?TEST_CONFIGURATIONS),
   init:stop().
 
 do_run(Subdir) -> 

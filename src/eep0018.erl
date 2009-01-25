@@ -88,7 +88,7 @@ build_options(In) ->
   
   #options{
     parse   = fetch_option(parse, Dict, object),      % object or value
-    objects = fetch_option(objects, Dict, eep0018),   % compat or eep0018
+    objects = fetch_option(objects, Dict, compat),    % compat or eep0018
     labels  = fetch_option(labels, Dict, binary),     % binary or atom
     number  = Opt_number,                             % exact, number, float
     
@@ -145,8 +145,8 @@ receive_value(InternOption) ->
       case InternOption#options.parse of
         object -> Adjusted;
         value  -> [ VALUE ] = Adjusted, VALUE
-      end;
-    UNKNOWN -> io:format("UNKNOWN 1 ~p ~n", [UNKNOWN]), UNKNOWN
+      end
+    % UNKNOWN -> io:format("UNKNOWN 1 ~p ~n", [UNKNOWN]), UNKNOWN
   end.
 
 %% adjust returned term %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

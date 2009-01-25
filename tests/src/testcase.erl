@@ -1,10 +1,7 @@
 -module(testcase).
 -export([run/2]).
 -export([benchmark/2]).
--export([parallel/2]).
 -export([run_case/2]).
-
--define(PROCS, 5).
 
 % loads and runs all test cases from a given subdir. A testcase
 % consists of a JSON input file, and some optional Erlang term
@@ -30,10 +27,6 @@ run(Subdir, Config) ->
 
 run_case(CaseBase, Config) ->
   run_case(test, CaseBase, Config).
-
-parallel(Subdir, Config) ->
-  do_run(parallel, Subdir, Config).
-
 
 benchmark(Subdir, Config) ->
   do_run(benchmark, Subdir, Config).
@@ -66,7 +59,7 @@ read_term(File) ->
   end.
 
 % write an erlang term to a file
-write_term(nil, Term) -> nil;
+write_term(nil, _) -> nil;
 write_term(File, Term) ->
   {ok, FileDev} = file:open(File, write),
   io:fwrite(FileDev, "~p.~n", [ Term ]),
@@ -79,7 +72,6 @@ run_case(Mode, CaseBase, Config) ->
   JsonInput = read_file(CaseBase ++ ".json"),
   case Mode of
     test      -> test_case(JsonInput, CaseBase, Config);
-    parallel  -> parallel_case(JsonInput, CaseBase, Config);
     benchmark -> benchmark_case(JsonInput, CaseBase, Config)
   end.
 
@@ -147,30 +139,6 @@ verify_result(Gold, R) ->
 delete_results(CaseBase, Config) ->
   lists:foreach(fun(R) -> file:delete(result_file(CaseBase, Config, R)) end, [ relaxed, pass, fail, ok ]),
   file:delete(err_file(CaseBase, Config, fail)).
-
-% -- run testcase in parallel
-
-parallel_case_run(JsonInput, CaseBase, Config) ->
-  test_case(JsonInput, CaseBase, Config).
-
-parallel_case(JsonInput, CaseBase, Config) ->
-  RunFun = fun() -> parallel_case_run(JsonInput, CaseBase, Config) end,
-  spawn_procs(?PROCS, RunFun),
-  wait_for_procs(?PROCS).
-
-spawn_procs(0, _) ->
-  ok;
-spawn_procs(N, Func) ->
-  S = self(),
-  spawn(fun() -> Func(), S ! finished end),
-  spawn_procs(N-1, Func).
-
-wait_for_procs(0) ->
-  ok;
-wait_for_procs(N) ->
-  receive finished -> ok end,
-  wait_for_procs(N-1).
-
 
 % -- run testcase for benchmark
 

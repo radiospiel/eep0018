@@ -1,8 +1,9 @@
 -module(runner).
 -export([run/1]).
--export([run_case/1]).
+-export([parallel/1]).
 -export([benchmark/1]).
 
+-define(PROCS, 5).
 
 %
 % which modules to check?
@@ -28,10 +29,8 @@ run(A) ->
 do_run(Subdir) -> 
   lists:foreach(fun(C) -> testcase:run(Subdir, C) end, ?TEST_CONFIGURATIONS).
 
-run_case(A) ->
-  eep0018:start("../bin"),
-  lists:foreach(fun(C) -> testcase:run_case(A, C) end, ?TEST_CONFIGURATIONS),
-  init:stop().
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 benchmark(Subdir) ->
   eep0018:start("../bin"),
@@ -45,3 +44,30 @@ benchmark(Subdir) ->
     end,
     ?TEST_CONFIGURATIONS),
   init:stop().
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+parallel(A) ->
+  eep0018:start("../bin"),
+  do_parallel(A),
+  init:stop().
+
+do_parallel(A) ->
+  RunFun = fun() -> 
+    lists:foreach(fun(Subdir) -> do_run(Subdir) end, A)
+  end,
+  spawn_procs(?PROCS, RunFun),
+  wait_for_procs(?PROCS).
+
+spawn_procs(0, _) ->
+  ok;
+spawn_procs(N, Func) ->
+  S = self(),
+  spawn(fun() -> Func(), S ! finished end),
+  spawn_procs(N-1, Func).
+
+wait_for_procs(0) ->
+  ok;
+wait_for_procs(N) ->
+  receive finished -> ok end,
+  wait_for_procs(N-1).

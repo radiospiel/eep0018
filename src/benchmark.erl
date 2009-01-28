@@ -18,7 +18,7 @@ run(Label, Fun) ->
   R.
 
 run3(Fun) ->
-  run("*", Fun).
+  run3("*", Fun).
 
 run3(Label, Fun) ->
   Fun(),

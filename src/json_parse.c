@@ -2,6 +2,11 @@
 #include <string.h>
 #include <stdlib.h>
 
+/* count items in a structure, i.e. in a list or in a map */
+typedef struct {
+  int count;
+} LInfo;
+
 /*
  * 
  *  This parser encodes the "sax" stream of json tokens into ei. Note that 
@@ -53,7 +58,55 @@ typedef struct {
    * for empty lists, and to remember that we are on a list head.
    */
   int skip_list_header_for_value;
+  
+  LInfo* li_stack;
+  LInfo* li_sp;
+  int    li_stack_size;
 } State;
+
+static inline void init(State* p, int options) {
+  p->li_stack = p->li_sp = 0;
+  p->li_stack_size = 0;
+
+  
+  ei_x_new_with_version(&p->ei_buf);
+  p->skip_list_header_for_value = -1;
+  p->options = options;
+}
+
+static inline void deinit(State* p) {
+  ei_x_free(&p->ei_buf);
+  free(p->li_stack);
+}
+
+/* === a stack of listinfos ======================================= */
+
+static inline LInfo* pop_li(State* p) {
+  return (p->li_sp--);
+}
+
+static inline LInfo* top_li(State* p) {
+  return (p->li_sp);
+}
+
+static inline LInfo* push_li(State* p) {
+  if(p->li_stack + p->li_stack_size == p->li_sp) {
+    LInfo* new_stack;
+    
+    p->li_stack_size = 2*p->li_stack_size + 4;
+    new_stack = realloc(p->li_stack, p->li_stack_size * sizeof(LInfo*));
+    p->li_sp = (p->li_sp - p->li_stack) + new_stack;
+    p->li_stack = new_stack;
+  }
+  
+  {
+    LInfo new_li = { 0 };
+    *++p->li_sp = new_li;
+  }
+  return top_li(p);
+}
+
+/* === parsing and building options ================================ */
 
 static inline int numbers_as(State* p) {
   return (p->options & EEP0018_PARSE_NUMBERS_MASK);
@@ -62,6 +115,8 @@ static inline int numbers_as(State* p) {
 static inline int keys_as(State* p) {
   return (p->options & EEP0018_PARSE_KEYS_MASK);
 }
+
+/* === write subterms ============================================== */
 
 static inline void write_atom(State *p, const char* atom, unsigned len)    
   { ei_x_encode_atom_len(&p->ei_buf, atom, len); }
@@ -93,6 +148,8 @@ static void inline list_header_for_value(State* pState) {
   else
     pState->skip_list_header_for_value = 0;
 }
+
+/* === yajl callbacks ============================================== */
 
 static int erl_json_ei_null(void* ctx) {
   State* pState = (State*) ctx;
@@ -289,10 +346,8 @@ void json_parse_to_ei(ErlDrvData session, const unsigned char* s, int len, int o
    * initialize yajl parser
    */
   State state;
-  ei_x_new_with_version(&state.ei_buf);
-  state.skip_list_header_for_value = -1;
-  state.options = opts;
-
+  init(&state, opts);
+  
   yajl_parser_config conf = { YAJL_ALLOW_COMMENTS }; // , YAJL_CHECK_UTF8 };
   yajl_handle handle = yajl_alloc(&callbacks, &conf, &state);
 
@@ -338,5 +393,5 @@ void json_parse_to_ei(ErlDrvData session, const unsigned char* s, int len, int o
   } 
 
   send_data(port, EEP0018_EI, state.ei_buf.buff, state.ei_buf.index);
-  ei_x_free(&state.ei_buf);
+  deinit(&state);
 }

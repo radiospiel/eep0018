@@ -175,10 +175,10 @@ adjust_eep0018(O, In) ->
 
 % adjust(O, In) -> adjust_compat(O, In).
 
-adjust(O, In, compat)  -> l("1"), adjust_compat(O, In);
-adjust(O, In, eep0018) -> l("2"), adjust(O, In, nop_options(O));
-adjust(_, In, true)    -> l("3"),In;
-adjust(O, In, _)       -> l("4"),adjust_eep0018(O, In).
+adjust(O, In, compat)  -> adjust_compat(O, In);
+adjust(O, In, eep0018) -> adjust(O, In, nop_options(O));
+adjust(_, In, true)    -> In;
+adjust(O, In, _)       -> adjust_eep0018(O, In).
 
 adjust(O, I) -> 
   In = adjust(O, I, O#options.objects),

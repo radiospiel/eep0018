@@ -63,28 +63,29 @@ static inline int keys_as(State* p) {
   return (p->options & EEP0018_PARSE_KEYS_MASK);
 }
 
-#ifndef NDEBUG
+static inline void write_atom(State *p, const char* atom, unsigned len)    
+  { ei_x_encode_atom_len(&p->ei_buf, atom, len); }
 
-static int ei_x_encode_list_header_log(ei_x_buff* x, int arity) {
-  fprintf(stderr, "<< list header: %d\n", arity); 
-  return ei_x_encode_list_header(x, arity);
-}
+static inline void write_double(State *p, double d)
+  { ei_x_encode_double(&p->ei_buf, d); }
 
-static int ei_x_encode_empty_list_log(ei_x_buff* x) {
-  fprintf(stderr, "<< list header: %d\n", 0); 
-  return ei_x_encode_empty_list(x);
-}
+static inline void write_long(State *p, long d)
+  { ei_x_encode_long(&p->ei_buf, d); }
 
-static int ei_x_encode_tuple_header_log(ei_x_buff* x, int arity) {
-  fprintf(stderr, "<< tuple header: %d\n", arity); 
-  return ei_x_encode_tuple_header(x, arity);
-}
+static inline void write_tuple_header(State *p, unsigned n)
+  { ei_x_encode_tuple_header(&p->ei_buf, n); }
 
-#define ei_x_encode_list_header   ei_x_encode_list_header_log
-#define ei_x_encode_tuple_header  ei_x_encode_tuple_header_log
-#define ei_x_encode_empty_list    ei_x_encode_empty_list_log
+static inline void write_list_header(State *p, unsigned n)
+  { ei_x_encode_list_header(&p->ei_buf, n); }
 
-#endif
+static inline void write_string(State *p, const char* s, unsigned len)
+  { ei_x_encode_string_len(&p->ei_buf, s, len); }
+
+static inline void write_binary(State *p, const char* s, unsigned len)
+  { ei_x_encode_binary(&p->ei_buf, s, len); }
+
+static inline void write_empty_list(State* p)
+  { ei_x_encode_empty_list(&p->ei_buf); }
 
 static void inline list_header_for_value(State* pState) {
   if(!pState->skip_list_header_for_value) 
@@ -99,7 +100,7 @@ static int erl_json_ei_null(void* ctx) {
   flog(stderr, "null", 0, 0, 0);
   
   list_header_for_value(pState);
-  ei_x_encode_atom_len(&pState->ei_buf, "null", 4);
+  write_atom(pState, "null", 4);
 
   return 1;
 }
@@ -113,9 +114,9 @@ static int erl_json_ei_boolean(void* ctx, int boolVal) {
   list_header_for_value(pState);
   
   if(boolVal)
-    ei_x_encode_atom_len(&pState->ei_buf, "true", 4);
+    write_atom(pState, "true", 4);
   else
-    ei_x_encode_atom_len(&pState->ei_buf, "false", 5);
+    write_atom(pState, "false", 5);
 
   return 1;
 }
@@ -131,14 +132,14 @@ static int erl_json_ei_number(void* ctx, const char * val, unsigned int len) {
     case EEP0018_PARSE_NUMBERS_AS_NUMBER:
     {
       if(memchr(val, '.', len) || memchr(val, 'e', len) || memchr(val, 'E', len))
-        ei_x_encode_double(&pState->ei_buf, strtod(val, 0));
+        write_double(pState, strtod(val, 0));
       else
-        ei_x_encode_long(&pState->ei_buf, strtol(val, 0, 10));
+        write_long(pState, strtol(val, 0, 10));
       break;
     }
     case EEP0018_PARSE_NUMBERS_AS_FLOAT:
     {
-      ei_x_encode_double(&pState->ei_buf, strtod(val, 0));
+      write_double(pState, strtod(val, 0));
       break;
     }
     case EEP0018_PARSE_NUMBERS_AS_TUPLE:
@@ -161,10 +162,10 @@ static int erl_json_ei_number(void* ctx, const char * val, unsigned int len) {
         }
       }
 
-      ei_x_encode_tuple_header(&pState->ei_buf, 3);
-      ei_x_encode_atom_len(&pState->ei_buf, "number", 6);
-      ei_x_encode_string_len(&pState->ei_buf, val, len);
-      ei_x_encode_atom_len(&pState->ei_buf, "a", 1);      // a dummy
+      write_tuple_header(pState, 3);
+      write_atom(pState, "number", 6);
+      write_string(pState, val, len);
+      write_atom(pState, "a", 1);       // a dummy
       break;
     }
   }
@@ -179,7 +180,7 @@ static int erl_json_ei_string(void* ctx, const unsigned char* val, unsigned int 
   flog(stderr, "string", 0, (const char*)val, len);
   
   list_header_for_value(pState);
-  ei_x_encode_binary(&pState->ei_buf, val, len);
+  write_binary(pState, (const char*)val, len);
   return 1;
 }
 
@@ -191,7 +192,8 @@ static int erl_json_ei_start_array(void* ctx) {
   list_header_for_value(pState);
   
   pState->skip_list_header_for_value = pState->ei_buf.index;
-  ei_x_encode_list_header(&pState->ei_buf, 1);
+  
+  write_list_header(pState, 1);
 
   return 1;
 }
@@ -205,8 +207,8 @@ static int erl_json_ei_end_array(void* ctx) {
     pState->ei_buf.index = pState->skip_list_header_for_value;
     pState->skip_list_header_for_value = 0;
   }
-  ei_x_encode_empty_list(&pState->ei_buf);
-
+  write_empty_list(pState);
+  
   return 1;
 }
 
@@ -226,10 +228,10 @@ static int erl_json_ei_end_map(void* ctx) {
   flog(stderr, "end map", 0, 0, 0);
   
   if(pState->skip_list_header_for_value) {
-    ei_x_encode_tuple_header(&pState->ei_buf, 0);
+    write_tuple_header(pState, 0);
     pState->skip_list_header_for_value = 0;
   }
-  ei_x_encode_empty_list(&pState->ei_buf);
+  write_empty_list(pState);
 
   return 1;
 }
@@ -241,14 +243,14 @@ static int erl_json_ei_map_key(void* ctx, const unsigned char* buf, unsigned int
 
   list_header_for_value(pState);
   
-  ei_x_encode_tuple_header(&pState->ei_buf, 2);
+  write_tuple_header(pState, 2);
 
   switch(keys_as(pState)) {
     case EEP0018_PARSE_KEYS_AS_ATOM:
-      ei_x_encode_atom_len(&pState->ei_buf, buf, len);
+      write_atom(pState, (const char*)buf, len);
       break;
     case EEP0018_PARSE_KEYS_AS_BINARY:
-      ei_x_encode_binary(&pState->ei_buf, buf, len);
+      write_binary(pState, (const char*)buf, len);
       break;
   }
 

@@ -1,3 +1,13 @@
+NOTE!
+
+The development in this version of the code is stalled at the moment. Please take the time and head over to paul's code at http://github.com/davisp/eep0018/tree
+
+Thank you!
+
+/eno
+
+=============================================================================================
+
 This module strives to prepare an EEP0018 implemenation. It implements most of the 
 functionality described there, with some additional features.  
 
@@ -6,7 +16,7 @@ Compiling
 
 Adjust the Makefile's top section. After that, run 
 
-  ./configure
+  make
 
 to compile everything. This results into
 
